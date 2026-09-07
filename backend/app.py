@@ -42,7 +42,13 @@ def products():
 
 @app.get('/api/stores')
 def stores():
-    return jsonify([{'name': p['store'], 'rating': 4.8, 'category': p['category']} for p in DEMO_PRODUCTS])
+    result=[]
+    for p in DEMO_PRODUCTS:
+        store=next((s for s in result if s['name']==p['store']),None)
+        if not store:
+            store={'name':p['store'],'rating':4.8,'category':p['category'],'products':[]}; result.append(store)
+        store['products'].append(p)
+    return jsonify(result)
 
 @app.post('/api/auth/login')
 def login():
