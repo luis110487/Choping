@@ -41,8 +41,6 @@ insert into stores (name, owner_name, category, city, description, rating)
 values
   ('Tech Zone', 'Equipo Tech Zone', 'Tecnologia', 'Bogota', 'Tecnologia para trabajar, estudiar y crear.', 4.9),
   ('Casa Viva', 'Equipo Casa Viva', 'Hogar', 'Medellin', 'Electrodomesticos practicos para el hogar.', 4.8),
-  ('Hogar Total', 'Equipo Hogar Total', 'Electrodomesticos', 'Cali', 'Soluciones para hogares familiares.', 4.6),
-  ('Movil Store', 'Equipo Movil Store', 'Celulares', 'Bogota', 'Celulares y accesorios para estar conectado.', 4.8),
   ('EcoRuedas', 'Equipo EcoRuedas', 'Movilidad', 'Barranquilla', 'Movilidad urbana electrica y sostenible.', 4.7)
 on conflict do nothing;
 
@@ -51,9 +49,13 @@ select s.id, p.name, p.category, p.description, p.story, p.price, p.image, p.rat
 from (values
   ('Tech Zone','Combo PC Gamer TUF','Tecnologia','Computador gamer completo para jugar, estudiar y crear contenido.','Nacio para armar un setup completo en una sola compra.',3850000,4.8,'Excelente rendimiento para juegos competitivos y multitarea diaria.',248,37,'products/pc-gamer.png'),
   ('Casa Viva','Licuadora Ninja Pro','Hogar','Potencia para jugos, smoothies y preparaciones diarias.','Pensada para cocinas activas y desayunos rapidos.',420000,4.7,'Tritura muy bien y se siente firme con mezclas densas.',186,52,'products/licuadora-ninja.png'),
-  ('Hogar Total','Lavadora semiautomatica 16 kg','Electrodomesticos','Gran capacidad y manejo practico para hogares familiares.','Hecha para resolver cargas grandes sin depender de lavanderias.',780000,4.5,'Buena capacidad, facil manejo y tamano conveniente.',121,29,'products/lavadora.png'),
-  ('Movil Store','Redmi Note 5G','Celulares','Pantalla amplia, camara multiple y bateria para todo el dia.','Un celular equilibrado para trabajar y mantenerse conectado.',1150000,4.9,'Pantalla nitida, buena autonomia y respuesta fluida.',312,84,'products/redmi.png'),
-  ('EcoRuedas','Moto electrica urbana','Movilidad','Movilidad urbana con bajo consumo y manejo sencillo.','Creada para moverse por la ciudad con menos gasto.',4600000,4.6,'Practica para ciudad, silenciosa y economica.',204,18,'products/moto-electrica.png')
+  ('Casa Viva','Lavadora semiautomatica 16 kg','Electrodomesticos','Gran capacidad y manejo practico para hogares familiares.','Hecha para resolver cargas grandes sin depender de lavanderias.',780000,4.5,'Buena capacidad, facil manejo y tamano conveniente.',121,29,'products/lavadora.png'),
+  ('Tech Zone','Redmi Note 5G','Celulares','Pantalla amplia, camara multiple y bateria para todo el dia.','Un celular equilibrado para trabajar y mantenerse conectado.',1150000,4.9,'Pantalla nitida, buena autonomia y respuesta fluida.',312,84,'products/redmi.png'),
+  ('EcoRuedas','Moto electrica urbana','Movilidad','Movilidad urbana con bajo consumo y manejo sencillo.','Creada para moverse por la ciudad con menos gasto.',4600000,4.6,'Practica para ciudad, silenciosa y economica.',204,18,'products/moto-electrica.png'),
+  ('Casa Viva','Aspiradora compacta','Hogar','Limpieza practica para espacios pequenos y medianos.','Una ayuda simple para mantener cada ambiente en orden.',295000,4.6,'Ligera y practica para la limpieza diaria.',98,21,'products/licuadora-ninja.png'),
+  ('Tech Zone','Teclado mecanico RGB','Tecnologia','Teclado mecanico iluminado para setups de trabajo y juego.','Un accesorio pensado para escribir y jugar con comodidad.',185000,4.7,'Respuesta agradable y buena iluminacion.',143,33,'products/pc-gamer.png'),
+  ('EcoRuedas','Casco urbano certificado','Movilidad','Proteccion comoda y ligera para recorridos urbanos.','Seguridad esencial para moverse todos los dias.',210000,4.8,'Comodo, ligero y de buen ajuste.',87,16,'products/moto-electrica.png'),
+  ('EcoRuedas','Bicicleta electrica urbana','Movilidad','Bicicleta electrica ligera para recorridos diarios por la ciudad.','Una alternativa practica para los trayectos cotidianos.',2800000,4.7,'Ligera y muy util para recorridos urbanos.',76,12,'products/moto-electrica.png')
 ) as p(store_name,name,category,description,story,price,rating,review,likes,purchases,image)
 join stores s on s.name = p.store_name
 where not exists (select 1 from products existing where existing.name = p.name);
