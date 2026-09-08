@@ -62,6 +62,19 @@ def login():
         return jsonify({'error': 'Correo y contraseña son obligatorios'}), 400
     return jsonify({'user': {'email': email, 'name': email.split('@')[0], 'role': 'cliente'}})
 
+@app.post('/api/auth/register')
+def register():
+    data = request.get_json(silent=True) or {}
+    name = data.get('name', '').strip()
+    email = data.get('email', '').strip().lower()
+    password = data.get('password', '')
+    role = data.get('role', 'cliente')
+    if not name or not email or not password:
+        return jsonify({'error': 'Nombre, correo y contraseña son obligatorios'}), 400
+    if role not in ('cliente', 'tienda'):
+        return jsonify({'error': 'Tipo de usuario no valido'}), 400
+    return jsonify({'user': {'name': name, 'email': email, 'role': role}, 'message': 'Usuario creado correctamente'}), 201
+
 with app.app_context():
     db.create_all()
 
