@@ -25,6 +25,7 @@ function App() {
     [banner, setBanner] = useState(() => Number(localStorage.getItem("choping-banner") || 0)),
     [adminOpen, setAdminOpen] = useState(false),
     [user, setUser] = useState(null),
+    [profileOpen, setProfileOpen] = useState(false),
     [storeAdminOpen, setStoreAdminOpen] = useState(false),
     [storeThemes, setStoreThemes] = useState(() => JSON.parse(localStorage.getItem("choping-store-themes") || '{"Tech Zone":"ocean","Casa Viva":"sunset","EcoRuedas":"forest"}'));
   useEffect(() => {
@@ -69,6 +70,7 @@ function App() {
             <button className="nav-link" onClick={() => setLoginOpen(true)}>
               Login
             </button>
+            {user?.role === "cliente" && <button className="nav-link" onClick={() => setProfileOpen(true)}>Mi perfil</button>}
             {(user?.role === "admin" || user?.role === "superadmin") && <button className="nav-link" onClick={() => setAdminOpen(true)}>Panel administrativo</button>}
             {user?.role === "tienda" && store && <button className="nav-link" onClick={() => setStoreAdminOpen(true)}>Personalizar tienda</button>}
             <button className="nav-cart" onClick={() => setCartOpen(true)}>
@@ -179,6 +181,7 @@ function App() {
         <CartModal cart={cart} setCart={setCart} total={total} close={() => setCartOpen(false)} />
       )}
       {loginOpen && <LoginModal close={() => setLoginOpen(false)} onLogin={(nextUser) => { setUser(nextUser); setLoginOpen(false); }} />}
+      {profileOpen && <ClientProfile stores={stores} close={() => setProfileOpen(false)} />}
       {adminOpen && <AdminBannerPanel stores={stores} banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} close={() => setAdminOpen(false)} />}
       {storeAdminOpen && <StoreCustomizer theme={storeThemes[store.name] || "ocean"} setTheme={(value) => { const next = { ...storeThemes, [store.name]: value }; setStoreThemes(next); localStorage.setItem("choping-store-themes", JSON.stringify(next)); }} close={() => setStoreAdminOpen(false)} />}
       <footer>
@@ -293,6 +296,10 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
 function StoreCustomizer({ theme, setTheme, close }) {
   const themes = [{ id: "ocean", name: "Ocean", detail: "Azul, limpia y tecnológica" }, { id: "sunset", name: "Sunset", detail: "Cálida y comercial" }, { id: "forest", name: "Forest", detail: "Natural y confiable" }, { id: "mono", name: "Minimal", detail: "Elegante y sobria" }];
   return <div className="overlay"><section className="cart-modal store-customizer"><button className="modal-close" onClick={close}>×</button><div className="cart-modal-content"><small>PANEL DE MI TIENDA</small><h2>Diseña tu perfil</h2><p>Elige una plantilla para organizar tu tienda.</p><div className="theme-options">{themes.map((item) => <button key={item.id} className={`theme-option theme-${item.id} ${theme === item.id ? "selected" : ""}`} onClick={() => setTheme(item.id)}><span className="theme-preview" /><strong>{item.name}</strong><small>{item.detail}</small></button>)}</div><h3>Contenido de la tienda</h3><label>Logo de la tienda<input type="file" accept="image/*" /></label><label>Banners superiores (hasta 3)<input type="file" accept="image/*" multiple /></label><p className="form-hint">Los cambios visuales se aplican inmediatamente a tu perfil.</p></div></section></div>;
+}
+function ClientProfile({ stores, close }) {
+  const products = stores.flatMap((store) => store.products).slice(0, 2);
+  return <div className="overlay"><section className="cart-modal client-profile"><button className="modal-close" onClick={close}>×</button><div className="cart-modal-content"><small>MI CUENTA</small><h2>Perfil de cliente</h2><div className="profile-section"><h3>Mis pedidos</h3><div className="profile-order"><strong>Pedido de prueba #1001</strong><span>2 productos · En preparación</span><b>$1.560.000</b></div></div><div className="profile-section"><h3>Tiendas</h3><div className="profile-stores">{stores.map((store) => <span key={store.name}>{store.name}</span>)}</div></div><div className="profile-section"><h3>Reseñar productos</h3>{products.map((product) => <div className="profile-review" key={product.id || product.name}><span>{product.name}</span><button className="review-stars" aria-label={`Reseñar ${product.name}`}>☆ ☆ ☆ ☆ ☆</button></div>)}</div></div></section></div>;
 }
 function LoginModal({ close, onLogin }) {
   const [register, setRegister] = useState(false), [name, setName] = useState(""), [email, setEmail] = useState(""), [password, setPassword] = useState(""), [role, setRole] = useState("cliente"), [phone, setPhone] = useState(""), [storeName, setStoreName] = useState(""), [category, setCategory] = useState(""), [city, setCity] = useState(""), [description, setDescription] = useState(""), [message, setMessage] = useState("");
