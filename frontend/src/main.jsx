@@ -22,7 +22,9 @@ function App() {
     [loginOpen, setLoginOpen] = useState(false),
     [banner, setBanner] = useState(() => Number(localStorage.getItem("choping-banner") || 0)),
     [adminOpen, setAdminOpen] = useState(false),
-    [user, setUser] = useState(null);
+    [user, setUser] = useState(null),
+    [storeAdminOpen, setStoreAdminOpen] = useState(false),
+    [storeTheme, setStoreTheme] = useState(() => localStorage.getItem("choping-store-theme") || "ocean");
   useEffect(() => {
     fetch(`${API}/api/stores`)
       .then((r) => r.json())
@@ -73,6 +75,7 @@ function App() {
               Login
             </button>
             {user?.role === "admin" && <button className="nav-link" onClick={() => setAdminOpen(true)}>Panel administrativo</button>}
+            {user?.role === "tienda" && store && <button className="nav-link" onClick={() => setStoreAdminOpen(true)}>Personalizar tienda</button>}
             <button className="nav-cart" onClick={() => setCartOpen(true)}>
               🛒 Carrito{" "}
               <small>
@@ -129,7 +132,7 @@ function App() {
           </div>
         </main>
       ) : (
-        <main>
+        <main className={`store-profile theme-${storeTheme}`}>
           <button className="back-link" onClick={() => setStore(null)}>
             ← Volver a tiendas
           </button>
@@ -184,6 +187,7 @@ function App() {
       )}
       {loginOpen && <LoginModal close={() => setLoginOpen(false)} onLogin={(nextUser) => { setUser(nextUser); setLoginOpen(false); }} />}
       {adminOpen && <AdminBannerPanel stores={stores} banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} close={() => setAdminOpen(false)} />}
+      {storeAdminOpen && <StoreCustomizer theme={storeTheme} setTheme={(value) => { setStoreTheme(value); localStorage.setItem("choping-store-theme", value); }} close={() => setStoreAdminOpen(false)} />}
       <footer>
         Desarrollado por{" "}
         <a href="https://www.techdatasync.com">www.techdatasync.com</a>
@@ -292,6 +296,10 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
   const [tab, setTab] = useState("banners"), [approved, setApproved] = useState(() => JSON.parse(localStorage.getItem("choping-approved-stores") || "[]"));
   const changeApproval = (name, value) => { const next = value ? [...new Set([...approved, name])] : approved.filter((item) => item !== name); setApproved(next); localStorage.setItem("choping-approved-stores", JSON.stringify(next)); };
   return <div className="overlay"><section className="cart-modal admin-banner-panel"><button className="modal-close" onClick={close}>×</button><div className="cart-modal-content"><small>PANEL ADMINISTRADOR</small><div className="admin-tabs"><button className={tab === "banners" ? "selected" : ""} onClick={() => setTab("banners")}>Banners</button><button className={tab === "stores" ? "selected" : ""} onClick={() => setTab("stores")}>Aprobación de tiendas</button></div>{tab === "banners" ? <><h2>Banner principal</h2><p>Selecciona el banner que deseas mostrar primero en la vista de tiendas.</p><div className="admin-banner-options">{images.map((image, i) => <button className={banner === i ? "selected" : ""} key={image} onClick={() => setBanner(i)}><img src={image} alt={`Banner ${i + 1}`} /><strong>Banner {i + 1}</strong></button>)}</div></> : <><h2>Tiendas pendientes</h2><p>Aprueba las tiendas que pueden aparecer en el directorio.</p><div className="admin-store-list">{stores.map((store) => <div className="admin-store-row" key={store.name}><div><strong>{store.name}</strong><small>{store.category} · {store.products.length} productos</small></div><button className={approved.includes(store.name) ? "approved" : ""} onClick={() => changeApproval(store.name, !approved.includes(store.name))}>{approved.includes(store.name) ? "Aprobada" : "Aprobar"}</button></div>)}</div></>}</div></section></div>;
+}
+function StoreCustomizer({ theme, setTheme, close }) {
+  const themes = [{ id: "ocean", name: "Ocean", detail: "Azul, limpia y tecnológica" }, { id: "sunset", name: "Sunset", detail: "Cálida y comercial" }, { id: "forest", name: "Forest", detail: "Natural y confiable" }, { id: "mono", name: "Minimal", detail: "Elegante y sobria" }];
+  return <div className="overlay"><section className="cart-modal store-customizer"><button className="modal-close" onClick={close}>×</button><div className="cart-modal-content"><small>PANEL DE MI TIENDA</small><h2>Diseña tu perfil</h2><p>Elige una plantilla para organizar tu tienda.</p><div className="theme-options">{themes.map((item) => <button key={item.id} className={`theme-option theme-${item.id} ${theme === item.id ? "selected" : ""}`} onClick={() => setTheme(item.id)}><span className="theme-preview" /><strong>{item.name}</strong><small>{item.detail}</small></button>)}</div><h3>Contenido de la tienda</h3><label>Logo de la tienda<input type="file" accept="image/*" /></label><label>Banners superiores (hasta 3)<input type="file" accept="image/*" multiple /></label><p className="form-hint">Los cambios visuales se aplican inmediatamente a tu perfil.</p></div></section></div>;
 }
 function LoginModal({ close, onLogin }) {
   const [register, setRegister] = useState(false), [name, setName] = useState(""), [email, setEmail] = useState(""), [password, setPassword] = useState(""), [role, setRole] = useState("cliente"), [phone, setPhone] = useState(""), [storeName, setStoreName] = useState(""), [category, setCategory] = useState(""), [city, setCity] = useState(""), [description, setDescription] = useState(""), [message, setMessage] = useState("");
