@@ -184,7 +184,7 @@ function App() {
         <CartModal cart={cart} total={total} close={() => setCartOpen(false)} />
       )}
       {loginOpen && <LoginModal close={() => setLoginOpen(false)} />}
-      {adminOpen && <AdminBannerPanel banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} close={() => setAdminOpen(false)} />}
+      {adminOpen && <AdminBannerPanel stores={stores} banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} close={() => setAdminOpen(false)} />}
       <footer>
         Desarrollado por{" "}
         <a href="https://www.techdatasync.com">www.techdatasync.com</a>
@@ -285,9 +285,11 @@ function BannerSlider({ banner, setBanner }) {
   useEffect(() => { const timer = setInterval(() => setBanner((banner + 1) % images.length), 6000); return () => clearInterval(timer); }, [banner, setBanner]);
   return <section className="banner-slider"><img className="banner-image" src={images[banner]} alt={`Banner ${banner + 1}`} /><button className="banner-control previous" onClick={() => setBanner((banner + 2) % 3)}>‹</button><button className="banner-control next" onClick={() => setBanner((banner + 1) % 3)}>›</button><div className="banner-dots">{images.map((_, i) => <button key={i} className={i === banner ? "active" : ""} aria-label={`Mostrar banner ${i + 1}`} onClick={() => setBanner(i)} />)}</div></section>;
 }
-function AdminBannerPanel({ banner, setBanner, close }) {
+function AdminBannerPanel({ stores, banner, setBanner, close }) {
   const images = ["/banner-home-1.png", "/banner-home-2.png", "/banner-home-3.png"];
-  return <div className="overlay"><section className="cart-modal admin-banner-panel"><button className="modal-close" onClick={close}>×</button><div className="cart-modal-content"><small>PANEL ADMINISTRADOR</small><h2>Banner principal</h2><p>Selecciona el banner que deseas mostrar primero en la vista de tiendas.</p><div className="admin-banner-options">{images.map((image, i) => <button className={banner === i ? "selected" : ""} key={image} onClick={() => setBanner(i)}><img src={image} alt={`Banner ${i + 1}`} /><strong>Banner {i + 1}</strong></button>)}</div></div></section></div>;
+  const [tab, setTab] = useState("banners"), [approved, setApproved] = useState(() => JSON.parse(localStorage.getItem("choping-approved-stores") || "[]"));
+  const changeApproval = (name, value) => { const next = value ? [...new Set([...approved, name])] : approved.filter((item) => item !== name); setApproved(next); localStorage.setItem("choping-approved-stores", JSON.stringify(next)); };
+  return <div className="overlay"><section className="cart-modal admin-banner-panel"><button className="modal-close" onClick={close}>×</button><div className="cart-modal-content"><small>PANEL ADMINISTRADOR</small><div className="admin-tabs"><button className={tab === "banners" ? "selected" : ""} onClick={() => setTab("banners")}>Banners</button><button className={tab === "stores" ? "selected" : ""} onClick={() => setTab("stores")}>Aprobación de tiendas</button></div>{tab === "banners" ? <><h2>Banner principal</h2><p>Selecciona el banner que deseas mostrar primero en la vista de tiendas.</p><div className="admin-banner-options">{images.map((image, i) => <button className={banner === i ? "selected" : ""} key={image} onClick={() => setBanner(i)}><img src={image} alt={`Banner ${i + 1}`} /><strong>Banner {i + 1}</strong></button>)}</div></> : <><h2>Tiendas pendientes</h2><p>Aprueba las tiendas que pueden aparecer en el directorio.</p><div className="admin-store-list">{stores.map((store) => <div className="admin-store-row" key={store.name}><div><strong>{store.name}</strong><small>{store.category} · {store.products.length} productos</small></div><button className={approved.includes(store.name) ? "approved" : ""} onClick={() => changeApproval(store.name, !approved.includes(store.name))}>{approved.includes(store.name) ? "Aprobada" : "Aprobar"}</button></div>)}</div></>}</div></section></div>;
 }
 function LoginModal({ close }) {
   const [register, setRegister] = useState(false), [name, setName] = useState(""), [email, setEmail] = useState(""), [password, setPassword] = useState(""), [role, setRole] = useState("cliente"), [message, setMessage] = useState("");
