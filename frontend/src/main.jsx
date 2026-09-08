@@ -13,6 +13,7 @@ const Stars = ({ value }) => (
 function App() {
   const [stores, setStores] = useState([]),
     [store, setStore] = useState(null),
+    [showAllProducts, setShowAllProducts] = useState(false),
     [query, setQuery] = useState(""),
     [categoryFilter, setCategoryFilter] = useState(""),
     [selected, setSelected] = useState(null),
@@ -62,11 +63,11 @@ function App() {
             <img src={`${API}/static/img/choping-logo.png`} alt="Choping" />
           </a>
           <nav>
-            <button className="nav-link" onClick={() => setStore(null)}>
+            <button className="nav-link" onClick={() => { setStore(null); setShowAllProducts(false); setQuery(""); }}>
               Tiendas
             </button>
-            {store && (
-              <button className="nav-link" onClick={() => setStore(null)}>
+            {!store && !showAllProducts && (
+              <button className="nav-link" onClick={() => { setStore(null); setShowAllProducts(true); setQuery(""); setCategoryFilter(""); }}>
                 Todos los productos
               </button>
             )}
@@ -87,12 +88,12 @@ function App() {
       </header>
       <BannerSlider storeName={store?.name} banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} />
       <section className="shop-hero">
-        <small>{store ? "TIENDA" : "DIRECTORIO DE TIENDAS"}</small>
-        <h1>{store ? store.name : "Encuentra una tienda para comenzar"}</h1>
+        <small>{store ? "TIENDA" : showAllProducts ? "CATALOGO GLOBAL" : "DIRECTORIO DE TIENDAS"}</small>
+        <h1>{store ? store.name : showAllProducts ? "Todos los productos" : "Encuentra una tienda para comenzar"}</h1>
         <p>
           {store
             ? "Explora los productos disponibles de esta tienda."
-            : "Conoce nuestros vendedores y entra a cada tienda para ver su catálogo."}
+            : showAllProducts ? "Explora productos de todas las tiendas en un solo lugar." : "Conoce nuestros vendedores y entra a cada tienda para ver su catálogo."}
         </p>
         <form className="product-search" onSubmit={(e) => e.preventDefault()}>
           <input
@@ -106,7 +107,7 @@ function App() {
           <button>Buscar</button>
         </form>
       </section>
-      {!store ? (
+      {!store && !showAllProducts ? (
         <main>
           <div className="store-grid">
             {visibleStores.map((s) => (
