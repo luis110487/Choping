@@ -86,7 +86,7 @@ function App() {
           </nav>
         </div>
       </header>
-      <BannerSlider banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} />
+      <BannerSlider storeName={store?.name} banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} />
       <section className="shop-hero">
         <small>{store ? "TIENDA" : "DIRECTORIO DE TIENDAS"}</small>
         <h1>{store ? store.name : "Encuentra una tienda para comenzar"}</h1>
@@ -286,8 +286,8 @@ function CartModal({ cart, setCart, total, close }) {
     </div>
   );
 }
-function BannerSlider({ banner, setBanner }) {
-  const images = ["/banner-home-1.png", "/banner-home-2.png", "/banner-home-3.png"];
+function BannerSlider({ storeName, banner, setBanner }) {
+  const images = storeName === "EcoRuedas" ? ["/ecorruedas-banner.png", "/ecorruedas-banner.png", "/ecorruedas-banner.png"] : ["/banner-home-1.png", "/banner-home-2.png", "/banner-home-3.png"];
   useEffect(() => { const timer = setInterval(() => setBanner((banner + 1) % images.length), 6000); return () => clearInterval(timer); }, [banner, setBanner]);
   return <section className="banner-slider"><img className="banner-image" src={images[banner]} alt={`Banner ${banner + 1}`} /><button className="banner-control previous" onClick={() => setBanner((banner + 2) % 3)}>‹</button><button className="banner-control next" onClick={() => setBanner((banner + 1) % 3)}>›</button><div className="banner-dots">{images.map((_, i) => <button key={i} className={i === banner ? "active" : ""} aria-label={`Mostrar banner ${i + 1}`} onClick={() => setBanner(i)} />)}</div></section>;
 }
