@@ -129,9 +129,6 @@ function App() {
         </main>
       ) : (
         <main className={`store-profile theme-${storeThemes[store.name] || "ocean"}`}>
-          <button className="back-link" onClick={() => setStore(null)}>
-            ← Volver a tiendas
-          </button>
           <div className="shop-grid">
             {products.map((p) => (
               <article
