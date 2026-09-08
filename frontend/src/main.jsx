@@ -86,7 +86,7 @@ function App() {
           </nav>
         </div>
       </header>
-      {!store && <BannerSlider banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} />}
+      <BannerSlider banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} />
       <section className="shop-hero">
         <small>{store ? "TIENDA" : "DIRECTORIO DE TIENDAS"}</small>
         <h1>{store ? store.name : "Encuentra una tienda para comenzar"}</h1>
