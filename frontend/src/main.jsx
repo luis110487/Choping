@@ -21,6 +21,7 @@ function App() {
       JSON.parse(localStorage.getItem("choping-cart") || "[]"),
     ),
     [cartOpen, setCartOpen] = useState(false),
+    [purchased, setPurchased] = useState(() => JSON.parse(localStorage.getItem("choping-purchased") || "[]")),
     [loginOpen, setLoginOpen] = useState(false),
     [banner, setBanner] = useState(() => Number(localStorage.getItem("choping-banner") || 0)),
     [adminOpen, setAdminOpen] = useState(false),
@@ -178,10 +179,10 @@ function App() {
         />
       )}{" "}
       {cartOpen && (
-        <CartModal cart={cart} setCart={setCart} total={total} close={() => setCartOpen(false)} />
+        <CartModal cart={cart} setCart={setCart} setPurchased={setPurchased} total={total} close={() => setCartOpen(false)} />
       )}
       {loginOpen && <LoginModal close={() => setLoginOpen(false)} onLogin={(nextUser) => { setUser(nextUser); setLoginOpen(false); }} />}
-      {profileOpen && <ClientProfile stores={stores} close={() => setProfileOpen(false)} />}
+      {profileOpen && <ClientProfile purchased={purchased} close={() => setProfileOpen(false)} />}
       {adminOpen && <AdminBannerPanel stores={stores} banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} close={() => setAdminOpen(false)} />}
       {storeAdminOpen && <StoreCustomizer theme={storeThemes[store.name] || "ocean"} setTheme={(value) => { const next = { ...storeThemes, [store.name]: value }; setStoreThemes(next); localStorage.setItem("choping-store-themes", JSON.stringify(next)); }} close={() => setStoreAdminOpen(false)} />}
       <footer>
@@ -243,7 +244,7 @@ function ProductModal({ product, add, close }) {
     </div>
   );
 }
-function CartModal({ cart, setCart, total, close }) {
+function CartModal({ cart, setCart, setPurchased, total, close }) {
   const [notice, setNotice] = useState(false);
   return (
     <div className="overlay">
@@ -273,7 +274,7 @@ function CartModal({ cart, setCart, total, close }) {
             <span>Total</span>
             <strong>{money(total)}</strong>
           </div>
-          <button className="btn cart-checkout" onClick={() => setNotice(true)}>
+          <button className="btn cart-checkout" onClick={() => { setPurchased(cart); localStorage.setItem("choping-purchased", JSON.stringify(cart)); setNotice(true); }}>
             Comprar
           </button>
         </div>
@@ -297,10 +298,12 @@ function StoreCustomizer({ theme, setTheme, close }) {
   const themes = [{ id: "ocean", name: "Ocean", detail: "Azul, limpia y tecnológica" }, { id: "sunset", name: "Sunset", detail: "Cálida y comercial" }, { id: "forest", name: "Forest", detail: "Natural y confiable" }, { id: "mono", name: "Minimal", detail: "Elegante y sobria" }];
   return <div className="overlay"><section className="cart-modal store-customizer"><button className="modal-close" onClick={close}>×</button><div className="cart-modal-content"><small>PANEL DE MI TIENDA</small><h2>Diseña tu perfil</h2><p>Elige una plantilla para organizar tu tienda.</p><div className="theme-options">{themes.map((item) => <button key={item.id} className={`theme-option theme-${item.id} ${theme === item.id ? "selected" : ""}`} onClick={() => setTheme(item.id)}><span className="theme-preview" /><strong>{item.name}</strong><small>{item.detail}</small></button>)}</div><h3>Contenido de la tienda</h3><label>Logo de la tienda<input type="file" accept="image/*" /></label><label>Banners superiores (hasta 3)<input type="file" accept="image/*" multiple /></label><p className="form-hint">Los cambios visuales se aplican inmediatamente a tu perfil.</p></div></section></div>;
 }
-function ClientProfile({ stores, close }) {
-  const products = stores.flatMap((store) => store.products).slice(0, 2);
-  return <div className="overlay"><section className="cart-modal client-profile"><button className="modal-close" onClick={close}>×</button><div className="cart-modal-content"><small>MI CUENTA</small><h2>Perfil de cliente</h2><div className="profile-section"><h3>Mis pedidos</h3><div className="profile-order"><strong>Pedido de prueba #1001</strong><span>2 productos · En preparación</span><b>$1.560.000</b></div></div><div className="profile-section"><h3>Tiendas</h3><div className="profile-stores">{stores.map((store) => <span key={store.name}>{store.name}</span>)}</div></div><div className="profile-section"><h3>Reseñar productos</h3>{products.map((product) => <div className="profile-review" key={product.id || product.name}><span>{product.name}</span><button className="review-stars" aria-label={`Reseñar ${product.name}`}>☆ ☆ ☆ ☆ ☆</button></div>)}</div></div></section></div>;
+function ClientProfile({ purchased, close }) {
+  const [reviewProduct, setReviewProduct] = useState(null);
+  const stores = [...new Set(purchased.map((product) => product.store))];
+  return <div className="overlay"><section className="cart-modal client-profile"><button className="modal-close" onClick={close}>×</button><div className="cart-modal-content"><small>MI CUENTA</small><h2>Perfil de cliente</h2><div className="profile-section"><h3>Mis pedidos</h3>{purchased.length ? purchased.map((product) => <div className="profile-order" key={product.id}><strong>{product.name}</strong><span>{product.quantity} unidad(es) · Comprado</span><b>{money(product.price * product.quantity)}</b></div>) : <p>Aún no tienes productos comprados.</p>}</div>{purchased.length > 0 && <><div className="profile-section"><h3>Tiendas</h3><div className="profile-stores">{stores.map((store) => <span key={store}>{store}</span>)}</div></div><div className="profile-section"><h3>Reseñar productos</h3>{purchased.map((product) => <div className="profile-review" key={product.id}><span>{product.name}</span><button className="review-stars" onClick={() => setReviewProduct(product)} aria-label={`Reseñar ${product.name}`}>☆ ☆ ☆ ☆ ☆</button></div>)}</div></>}</div></section>{reviewProduct && <ReviewModal product={reviewProduct} close={() => setReviewProduct(null)} />}</div>;
 }
+function ReviewModal({ product, close }) { const [rating, setRating] = useState(0), [comment, setComment] = useState(""); const save = () => { const reviews = JSON.parse(localStorage.getItem("choping-reviews") || "{}"); reviews[product.id] = { rating, comment, product: product.name }; localStorage.setItem("choping-reviews", JSON.stringify(reviews)); close(); }; return <div className="overlay review-overlay"><section className="cart-modal review-modal"><div className="cart-modal-content"><small>RESEÑA DEL PRODUCTO</small><h2>{product.name}</h2><div className="rating-picker">{[1,2,3,4,5].map((value) => <button key={value} className={value <= rating ? "chosen" : ""} onClick={() => setRating(value)}>★</button>)}</div><label>Comentario<textarea value={comment} onChange={(e) => setComment(e.target.value)} required /></label><button className="btn cart-checkout" disabled={!rating} onClick={save}>Guardar reseña</button><button className="nav-link" onClick={close}>Cancelar</button></div></section></div>; }
 function LoginModal({ close, onLogin }) {
   const [register, setRegister] = useState(false), [name, setName] = useState(""), [email, setEmail] = useState(""), [password, setPassword] = useState(""), [role, setRole] = useState("cliente"), [phone, setPhone] = useState(""), [storeName, setStoreName] = useState(""), [category, setCategory] = useState(""), [city, setCity] = useState(""), [description, setDescription] = useState(""), [message, setMessage] = useState("");
   const submit = async (e) => { e.preventDefault(); const endpoint = register ? "register" : "login"; const body = register ? { name, email, password, role, phone, store_name: storeName, category, city, description } : { email, password }; const response = await fetch(`${API}/api/auth/${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const data = await response.json(); if (response.ok && !register) onLogin(data.user); setMessage(response.ok ? (data.message || `Bienvenido, ${data.user.name}`) : data.error); };
