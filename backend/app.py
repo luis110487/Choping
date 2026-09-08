@@ -74,6 +74,10 @@ def register():
         return jsonify({'error': 'Nombre, correo y contraseña son obligatorios'}), 400
     if role not in ('cliente', 'tienda'):
         return jsonify({'error': 'Tipo de usuario no valido'}), 400
+    if role == 'cliente' and not data.get('phone', '').strip():
+        return jsonify({'error': 'El telefono es obligatorio para clientes'}), 400
+    if role == 'tienda' and not all(data.get(field, '').strip() for field in ('store_name', 'category', 'city', 'description')):
+        return jsonify({'error': 'Las tiendas deben indicar nombre, categoria, ciudad y descripcion'}), 400
     return jsonify({'user': {'name': name, 'email': email, 'role': role}, 'message': 'Usuario creado correctamente'}), 201
 
 with app.app_context():
