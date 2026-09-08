@@ -709,7 +709,7 @@ function StoreCustomizer({ theme, setTheme, close }) {
   );
 }
 function ClientProfile({ purchased, close }) {
-  const [reviewProduct, setReviewProduct] = useState(null), [passwordOpen, setPasswordOpen] = useState(false);
+  const [reviewProduct, setReviewProduct] = useState(null), [reviewStore, setReviewStore] = useState(null), [passwordOpen, setPasswordOpen] = useState(false);
   const stores = [...new Set(purchased.map((product) => product.store))];
   return (
     <div className="overlay">
@@ -741,7 +741,7 @@ function ClientProfile({ purchased, close }) {
                 <h3>Tiendas</h3>
                 <div className="profile-stores">
                   {stores.map((store) => (
-                    <span key={store}>{store}</span>
+                    <div className="profile-store-review" key={store}><span>{store}</span><button className="review-stars" onClick={() => setReviewStore(store)} aria-label={`Reseñar ${store}`}>☆ ☆ ☆ ☆ ☆</button></div>
                   ))}
                 </div>
               </div>
@@ -771,10 +771,12 @@ function ClientProfile({ purchased, close }) {
         />
       )}
       {passwordOpen && <PasswordModal close={() => setPasswordOpen(false)} />}
+      {reviewStore && <StoreReviewModal store={reviewStore} close={() => setReviewStore(null)} />}
     </div>
   );
 }
 function PasswordModal({ close }) { const [current, setCurrent] = useState(""), [next, setNext] = useState(""), [confirm, setConfirm] = useState(""), [message, setMessage] = useState(""); const save = (e) => { e.preventDefault(); if (next.length < 8 || next !== confirm) return setMessage("La nueva contraseña debe tener 8 caracteres y coincidir."); localStorage.setItem("choping-password-updated", "true"); setMessage("Contraseña actualizada correctamente."); }; return <div className="overlay review-overlay"><section className="cart-modal review-modal"><form className="cart-modal-content" onSubmit={save}><small>SEGURIDAD</small><h2>Cambiar contraseña</h2><label>Contraseña actual<input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} required /></label><label>Nueva contraseña<input type="password" value={next} onChange={(e) => setNext(e.target.value)} required /></label><label>Confirmar contraseña<input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required /></label>{message && <p>{message}</p>}<button className="btn cart-checkout">Guardar contraseña</button><button type="button" className="nav-link" onClick={close}>Cancelar</button></form></section></div>; }
+function StoreReviewModal({ store, close }) { const [rating, setRating] = useState(0), [comment, setComment] = useState(""); const save = () => { const reviews = JSON.parse(localStorage.getItem("choping-store-reviews") || "{}"); reviews[store] = { rating, comment, store }; localStorage.setItem("choping-store-reviews", JSON.stringify(reviews)); close(); }; return <div className="overlay review-overlay"><section className="cart-modal review-modal"><div className="cart-modal-content"><small>RESEÑA DE LA TIENDA</small><h2>{store}</h2><div className="rating-picker">{[1,2,3,4,5].map((value) => <button key={value} className={value <= rating ? "chosen" : ""} onClick={() => setRating(value)}>★</button>)}</div><label>Comentario<textarea value={comment} onChange={(e) => setComment(e.target.value)} required /></label><button className="btn cart-checkout" disabled={!rating} onClick={save}>Guardar reseña</button><button className="nav-link" onClick={close}>Cancelar</button></div></section></div>; }
 function ReviewModal({ product, close }) {
   const [rating, setRating] = useState(0),
     [comment, setComment] = useState("");
