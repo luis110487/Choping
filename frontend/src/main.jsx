@@ -14,6 +14,7 @@ function App() {
   const [stores, setStores] = useState([]),
     [store, setStore] = useState(null),
     [query, setQuery] = useState(""),
+    [categoryFilter, setCategoryFilter] = useState(""),
     [selected, setSelected] = useState(null),
     [cart, setCart] = useState(() =>
       JSON.parse(localStorage.getItem("choping-cart") || "[]"),
@@ -38,11 +39,9 @@ function App() {
     store ? store.products : stores.flatMap((s) => s.products)
   ).filter(
     (p) =>
-      !query ||
-      `${p.name} ${p.category} ${p.store}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+      (!query || `${p.name} ${p.category} ${p.store}`.toLowerCase().includes(query.toLowerCase())) && (!categoryFilter || p.category === categoryFilter),
   );
+  const categories = store ? [...new Set(store.products.map((p) => p.category))] : [];
   const visibleStores = stores.filter((s) => {
     const text = `${s.name} ${s.category} ${s.products.map((p) => `${p.name} ${p.category}`).join(' ')}`.toLowerCase();
     return !query || text.includes(query.toLowerCase());
@@ -103,6 +102,7 @@ function App() {
               store ? "Buscar en esta tienda" : "Buscar productos o tiendas"
             }
           />
+          {store && <select className="category-filter" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Filtrar por categoria"><option value="">Todas las categorias</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select>}
           <button>Buscar</button>
         </form>
       </section>
