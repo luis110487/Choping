@@ -68,8 +68,8 @@ function App() {
             <button className="nav-link" onClick={() => { setStore(null); setShowAllProducts(false); setQuery(""); }}>
               Tiendas
             </button>
-            <button className="nav-link" onClick={() => setLoginOpen(true)}>
-              Login
+            <button className="nav-link" onClick={() => user ? (setUser(null), setProfileOpen(false), setAdminOpen(false), setStoreAdminOpen(false)) : setLoginOpen(true)}>
+              {user ? "Logout" : "Login"}
             </button>
             {user?.role === "cliente" && <button className="nav-link" onClick={() => setProfileOpen(true)}>Mi perfil</button>}
             {(user?.role === "admin" || user?.role === "superadmin") && <button className="nav-link" onClick={() => setAdminOpen(true)}>Panel administrativo</button>}
