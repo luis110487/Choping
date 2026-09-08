@@ -196,7 +196,7 @@ function App() {
   );
 }
 function ProductModal({ product, add, close }) {
-  const [q, setQ] = useState(1),
+  const [q, setQ] = useState(1), [imageIndex, setImageIndex] = useState(0),
     images = product.images || [product.image, product.image, product.image];
   return (
     <div className="overlay">
@@ -206,14 +206,14 @@ function ProductModal({ product, add, close }) {
         </button>
         <div className="modal-body">
           <div className="modal-gallery">
-            <img src={`${API}/static/img/${images[0]}`} alt={product.name} />
+            <div className="product-image-slider"><button className="image-arrow previous" onClick={() => setImageIndex((imageIndex + images.length - 1) % images.length)}>‹</button><img src={`${API}/static/img/${images[imageIndex]}`} alt={product.name} /><button className="image-arrow next" onClick={() => setImageIndex((imageIndex + 1) % images.length)}>›</button></div>
             <div className="modal-thumbnails">
               {images.map((x, i) => (
-                <img
+                <button className={imageIndex === i ? "active" : ""} onClick={() => setImageIndex(i)}><img
                   key={i}
                   src={`${API}/static/img/${x}`}
                   alt={`Vista ${i + 1}`}
-                />
+                /></button>
               ))}
             </div>
           </div>
