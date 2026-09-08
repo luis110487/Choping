@@ -18,7 +18,8 @@ function App() {
     [cart, setCart] = useState(() =>
       JSON.parse(localStorage.getItem("choping-cart") || "[]"),
     ),
-    [cartOpen, setCartOpen] = useState(false);
+    [cartOpen, setCartOpen] = useState(false),
+    [loginOpen, setLoginOpen] = useState(false);
   useEffect(() => {
     fetch(`${API}/api/stores`)
       .then((r) => r.json())
@@ -65,6 +66,9 @@ function App() {
                 Todos los productos
               </button>
             )}
+            <button className="nav-link" onClick={() => setLoginOpen(true)}>
+              Login
+            </button>
             <button className="nav-cart" onClick={() => setCartOpen(true)}>
               🛒 Carrito{" "}
               <small>
@@ -173,6 +177,7 @@ function App() {
       {cartOpen && (
         <CartModal cart={cart} total={total} close={() => setCartOpen(false)} />
       )}
+      {loginOpen && <LoginModal close={() => setLoginOpen(false)} />}
       <footer>
         Desarrollado por{" "}
         <a href="https://www.techdatasync.com">www.techdatasync.com</a>
@@ -267,5 +272,10 @@ function CartModal({ cart, total, close }) {
       </section>
     </div>
   );
+}
+function LoginModal({ close }) {
+  const [email, setEmail] = useState(""), [password, setPassword] = useState(""), [message, setMessage] = useState("");
+  const submit = async (e) => { e.preventDefault(); const response = await fetch(`${API}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) }); const data = await response.json(); setMessage(response.ok ? `Bienvenido, ${data.user.name}` : data.error); };
+  return <div className="overlay"><section className="cart-modal"><button className="modal-close" onClick={close}>×</button><form className="cart-modal-content" onSubmit={submit}><small>ACCESO UNICO</small><h2>Iniciar sesión</h2><label>Correo electrónico<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label><label>Contraseña<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>{message && <p>{message}</p>}<button className="btn cart-checkout">Ingresar</button></form></section></div>;
 }
 createRoot(document.getElementById("root")).render(<App />);
