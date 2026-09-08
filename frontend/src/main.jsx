@@ -29,8 +29,8 @@ function App() {
       Number(localStorage.getItem("choping-banner") || 0),
     ),
     [adminOpen, setAdminOpen] = useState(false),
-    [user, setUser] = useState(null),
-    [profileOpen, setProfileOpen] = useState(false),
+    [user, setUser] = useState(() => JSON.parse(localStorage.getItem("choping-user") || "null")),
+    [profileOpen, setProfileOpen] = useState(() => localStorage.getItem("choping-profile-open") === "true"),
     [storeAdminOpen, setStoreAdminOpen] = useState(false),
     [storeThemes, setStoreThemes] = useState(() =>
       JSON.parse(
@@ -101,7 +101,7 @@ function App() {
               className="nav-link"
               onClick={() =>
                 user
-                  ? (setUser(null),
+                  ? (setUser(null), localStorage.removeItem("choping-user"), localStorage.removeItem("choping-profile-open"),
                     setProfileOpen(false),
                     setAdminOpen(false),
                     setStoreAdminOpen(false))
@@ -111,8 +111,8 @@ function App() {
               {user ? "Logout" : "Login"}
             </button>
             {user?.role === "cliente" && (
-              <button className="nav-link" onClick={() => setProfileOpen(true)}>
-                Mi perfil
+              <button className="nav-link" onClick={() => { setProfileOpen(true); localStorage.setItem("choping-profile-open", "true"); }}>
+              Mi perfil
               </button>
             )}
             {(user?.role === "admin" || user?.role === "superadmin") && (
@@ -287,6 +287,7 @@ function App() {
           close={() => setLoginOpen(false)}
           onLogin={(nextUser) => {
             setUser(nextUser);
+            localStorage.setItem("choping-user", JSON.stringify(nextUser));
             setLoginOpen(false);
           }}
         />
@@ -294,7 +295,7 @@ function App() {
       {profileOpen && (
         <ClientProfile
           purchased={purchased}
-          close={() => setProfileOpen(false)}
+          close={() => { setProfileOpen(false); localStorage.setItem("choping-profile-open", "false"); }}
         />
       )}
       {adminOpen && (
