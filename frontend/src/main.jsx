@@ -180,7 +180,7 @@ function App() {
         />
       )}{" "}
       {cartOpen && (
-        <CartModal cart={cart} total={total} close={() => setCartOpen(false)} />
+        <CartModal cart={cart} setCart={setCart} total={total} close={() => setCartOpen(false)} />
       )}
       {loginOpen && <LoginModal close={() => setLoginOpen(false)} onLogin={(nextUser) => { setUser(nextUser); setLoginOpen(false); }} />}
       {adminOpen && <AdminBannerPanel stores={stores} banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} close={() => setAdminOpen(false)} />}
@@ -243,7 +243,7 @@ function ProductModal({ product, add, close }) {
     </div>
   );
 }
-function CartModal({ cart, total, close }) {
+function CartModal({ cart, setCart, total, close }) {
   const [notice, setNotice] = useState(false);
   return (
     <div className="overlay">
@@ -258,11 +258,12 @@ function CartModal({ cart, total, close }) {
             cart.map((p) => (
               <div className="cart-item" key={p.id}>
                 <img src={`${API}/static/img/${p.image}`} alt="" />
-                <div>
+                <div className="cart-item-info">
                   <strong>{p.name}</strong>
-                  <span>{p.quantity} unidad(es)</span>
+                  <b>{money(p.price)}</b>
+                  <div className="cart-quantity"><button onClick={() => setCart(cart.map((item) => item.id === p.id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))}>−</button><strong>{p.quantity}</strong><button onClick={() => setCart(cart.map((item) => item.id === p.id ? { ...item, quantity: item.quantity + 1 } : item))}>+</button></div>
                 </div>
-                <b>{money(p.price * p.quantity)}</b>
+                <button className="cart-remove" aria-label={`Eliminar ${p.name}`} onClick={() => setCart(cart.filter((item) => item.id !== p.id))}>♜</button>
               </div>
             ))
           ) : (
