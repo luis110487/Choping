@@ -710,8 +710,14 @@ function StoreCustomizer({ theme, setTheme, close }) {
   );
 }
 function ClientProfile({ purchased, close }) {
-  const [reviewProduct, setReviewProduct] = useState(null), [reviewStore, setReviewStore] = useState(null), [passwordOpen, setPasswordOpen] = useState(false);
+  const [reviewProduct, setReviewProduct] = useState(null), [reviewStore, setReviewStore] = useState(null), [passwordOpen, setPasswordOpen] = useState(false), [refresh, setRefresh] = useState(0);
   const stores = [...new Set(purchased.map((product) => product.store))];
+  const reviews = JSON.parse(localStorage.getItem("choping-reviews") || "{}");
+  const storeReviews = JSON.parse(localStorage.getItem("choping-store-reviews") || "{}");
+  const dismissed = JSON.parse(localStorage.getItem("choping-dismissed-reviews") || "{}");
+  const pendingProducts = purchased.filter((product) => !reviews[product.id] && !dismissed[`product-${product.id}`]);
+  const pendingStores = stores.filter((store) => !storeReviews[store] && !dismissed[`store-${store}`]);
+  const dismiss = (key) => { const next = { ...dismissed, [key]: true }; localStorage.setItem("choping-dismissed-reviews", JSON.stringify(next)); setRefresh(refresh + 1); };
   return (
     <div className="overlay">
       <section className="cart-modal client-profile">
@@ -721,6 +727,7 @@ function ClientProfile({ purchased, close }) {
         <div className="cart-modal-content">
           <small>MI CUENTA</small>
           <h2>Perfil de cliente</h2>
+          {(pendingProducts.length > 0 || pendingStores.length > 0) && <div className="review-alert">Tienes reseñas pendientes de productos y tiendas que compraste.</div>}
           <button className="btn profile-password-button" onClick={() => setPasswordOpen(true)}>Cambiar contraseña</button>
           <div className="profile-section">
             <h3>Mis pedidos</h3>
@@ -742,13 +749,13 @@ function ClientProfile({ purchased, close }) {
                 <h3>Tiendas</h3>
                 <div className="profile-stores">
                   {stores.map((store) => (
-                    <div className="profile-store-review" key={store}><span>{store}</span><button className="review-stars" onClick={() => setReviewStore(store)} aria-label={`Reseñar ${store}`}>☆ ☆ ☆ ☆ ☆</button></div>
+                    <div className="profile-store-review" key={store}><span>{store}</span>{pendingStores.includes(store) && <button className="review-stars" onClick={() => setReviewStore(store)} aria-label={`Reseñar ${store}`}>☆ ☆ ☆ ☆ ☆</button>}</div>
                   ))}
                 </div>
               </div>
               <div className="profile-section">
                 <h3>Reseñar productos</h3>
-                {purchased.map((product) => (
+                {pendingProducts.map((product) => (
                   <div className="profile-review" key={product.id}>
                     <span>{product.name}</span>
                     <button
@@ -759,7 +766,7 @@ function ClientProfile({ purchased, close }) {
                       ☆ ☆ ☆ ☆ ☆
                     </button>
                   </div>
-                ))}
+                ))}{!pendingProducts.length && <p>Ya gestionaste las reseñas de tus productos comprados.</p>}
               </div>
             </>
           )}
@@ -768,24 +775,25 @@ function ClientProfile({ purchased, close }) {
       {reviewProduct && (
         <ReviewModal
           product={reviewProduct}
-          close={() => setReviewProduct(null)}
+          close={() => { dismiss(`product-${reviewProduct.id}`); setReviewProduct(null); }}
+          onSaved={() => { setReviewProduct(null); setRefresh(refresh + 1); }}
         />
       )}
       {passwordOpen && <PasswordModal close={() => setPasswordOpen(false)} />}
-      {reviewStore && <StoreReviewModal store={reviewStore} close={() => setReviewStore(null)} />}
+      {reviewStore && <StoreReviewModal store={reviewStore} close={() => { dismiss(`store-${reviewStore}`); setReviewStore(null); }} onSaved={() => { setReviewStore(null); setRefresh(refresh + 1); }} />}
     </div>
   );
 }
 function PasswordModal({ close }) { const [current, setCurrent] = useState(""), [next, setNext] = useState(""), [confirm, setConfirm] = useState(""), [message, setMessage] = useState(""); const save = (e) => { e.preventDefault(); if (next.length < 8 || next !== confirm) return setMessage("La nueva contraseña debe tener 8 caracteres y coincidir."); localStorage.setItem("choping-password-updated", "true"); setMessage("Contraseña actualizada correctamente."); }; return <div className="overlay review-overlay"><section className="cart-modal review-modal"><form className="cart-modal-content" onSubmit={save}><small>SEGURIDAD</small><h2>Cambiar contraseña</h2><label>Contraseña actual<input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} required /></label><label>Nueva contraseña<input type="password" value={next} onChange={(e) => setNext(e.target.value)} required /></label><label>Confirmar contraseña<input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required /></label>{message && <p>{message}</p>}<button className="btn cart-checkout">Guardar contraseña</button><button type="button" className="nav-link" onClick={close}>Cancelar</button></form></section></div>; }
 function StoreReviewModal({ store, close }) { const [rating, setRating] = useState(0), [comment, setComment] = useState(""); const save = () => { const reviews = JSON.parse(localStorage.getItem("choping-store-reviews") || "{}"); reviews[store] = { rating, comment, store }; localStorage.setItem("choping-store-reviews", JSON.stringify(reviews)); close(); }; return <div className="overlay review-overlay"><section className="cart-modal review-modal"><div className="cart-modal-content"><small>RESEÑA DE LA TIENDA</small><h2>{store}</h2><div className="rating-picker">{[1,2,3,4,5].map((value) => <button key={value} className={value <= rating ? "chosen" : ""} onClick={() => setRating(value)}>★</button>)}</div><label>Comentario<textarea value={comment} onChange={(e) => setComment(e.target.value)} required /></label><button className="btn cart-checkout" disabled={!rating} onClick={save}>Guardar reseña</button><button className="nav-link" onClick={close}>Cancelar</button></div></section></div>; }
-function ReviewModal({ product, close }) {
+function ReviewModal({ product, close, onSaved }) {
   const [rating, setRating] = useState(0),
     [comment, setComment] = useState("");
   const save = () => {
     const reviews = JSON.parse(localStorage.getItem("choping-reviews") || "{}");
     reviews[product.id] = { rating, comment, product: product.name };
     localStorage.setItem("choping-reviews", JSON.stringify(reviews));
-    close();
+    onSaved();
   };
   return (
     <div className="overlay review-overlay">
