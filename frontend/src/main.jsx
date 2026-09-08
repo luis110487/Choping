@@ -19,7 +19,9 @@ function App() {
       JSON.parse(localStorage.getItem("choping-cart") || "[]"),
     ),
     [cartOpen, setCartOpen] = useState(false),
-    [loginOpen, setLoginOpen] = useState(false);
+    [loginOpen, setLoginOpen] = useState(false),
+    [banner, setBanner] = useState(() => Number(localStorage.getItem("choping-banner") || 0)),
+    [adminOpen, setAdminOpen] = useState(false);
   useEffect(() => {
     fetch(`${API}/api/stores`)
       .then((r) => r.json())
@@ -69,6 +71,9 @@ function App() {
             <button className="nav-link" onClick={() => setLoginOpen(true)}>
               Login
             </button>
+            <button className="nav-link" onClick={() => setAdminOpen(true)}>
+              Banners
+            </button>
             <button className="nav-cart" onClick={() => setCartOpen(true)}>
               🛒 Carrito{" "}
               <small>
@@ -79,6 +84,7 @@ function App() {
           </nav>
         </div>
       </header>
+      {!store && <BannerSlider banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} />}
       <section className="shop-hero">
         <small>{store ? "TIENDA" : "DIRECTORIO DE TIENDAS"}</small>
         <h1>{store ? store.name : "Encuentra una tienda para comenzar"}</h1>
@@ -178,6 +184,7 @@ function App() {
         <CartModal cart={cart} total={total} close={() => setCartOpen(false)} />
       )}
       {loginOpen && <LoginModal close={() => setLoginOpen(false)} />}
+      {adminOpen && <AdminBannerPanel banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} close={() => setAdminOpen(false)} />}
       <footer>
         Desarrollado por{" "}
         <a href="https://www.techdatasync.com">www.techdatasync.com</a>
@@ -272,6 +279,15 @@ function CartModal({ cart, total, close }) {
       </section>
     </div>
   );
+}
+function BannerSlider({ banner, setBanner }) {
+  const images = ["/banner-home-1.png", "/banner-home-2.png", "/banner-home-3.png"];
+  useEffect(() => { const timer = setInterval(() => setBanner((banner + 1) % images.length), 6000); return () => clearInterval(timer); }, [banner, setBanner]);
+  return <section className="banner-slider"><img className="banner-image" src={images[banner]} alt={`Banner ${banner + 1}`} /><button className="banner-control previous" onClick={() => setBanner((banner + 2) % 3)}>‹</button><button className="banner-control next" onClick={() => setBanner((banner + 1) % 3)}>›</button><div className="banner-dots">{images.map((_, i) => <button key={i} className={i === banner ? "active" : ""} aria-label={`Mostrar banner ${i + 1}`} onClick={() => setBanner(i)} />)}</div></section>;
+}
+function AdminBannerPanel({ banner, setBanner, close }) {
+  const images = ["/banner-home-1.png", "/banner-home-2.png", "/banner-home-3.png"];
+  return <div className="overlay"><section className="cart-modal admin-banner-panel"><button className="modal-close" onClick={close}>×</button><div className="cart-modal-content"><small>PANEL ADMINISTRADOR</small><h2>Banner principal</h2><p>Selecciona el banner que deseas mostrar primero en la vista de tiendas.</p><div className="admin-banner-options">{images.map((image, i) => <button className={banner === i ? "selected" : ""} key={image} onClick={() => setBanner(i)}><img src={image} alt={`Banner ${i + 1}`} /><strong>Banner {i + 1}</strong></button>)}</div></div></section></div>;
 }
 function LoginModal({ close }) {
   const [email, setEmail] = useState(""), [password, setPassword] = useState(""), [message, setMessage] = useState("");
