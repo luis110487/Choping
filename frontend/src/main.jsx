@@ -66,11 +66,6 @@ function App() {
             <button className="nav-link" onClick={() => { setStore(null); setShowAllProducts(false); setQuery(""); }}>
               Tiendas
             </button>
-            {!store && !showAllProducts && (
-              <button className="nav-link" onClick={() => { setStore(null); setShowAllProducts(true); setQuery(""); setCategoryFilter(""); }}>
-                Todos los productos
-              </button>
-            )}
             <button className="nav-link" onClick={() => setLoginOpen(true)}>
               Login
             </button>
