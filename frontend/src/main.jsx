@@ -244,6 +244,7 @@ function ProductModal({ product, add, close }) {
   );
 }
 function CartModal({ cart, total, close }) {
+  const [notice, setNotice] = useState(false);
   return (
     <div className="overlay">
       <section className="cart-modal">
@@ -271,11 +272,12 @@ function CartModal({ cart, total, close }) {
             <span>Total</span>
             <strong>{money(total)}</strong>
           </div>
-          <a className="btn cart-checkout" href={`${API}/checkout`}>
+          <button className="btn cart-checkout" onClick={() => setNotice(true)}>
             Comprar
-          </a>
+          </button>
         </div>
       </section>
+      {notice && <div className="overlay notice-overlay"><section className="cart-modal notice-modal"><div className="cart-modal-content"><small>CHOPING</small><h2>Próximamente</h2><p>El módulo de pagos estará disponible próximamente.</p><button className="btn cart-checkout" onClick={() => setNotice(false)}>Aceptar</button></div></section></div>}
     </div>
   );
 }
