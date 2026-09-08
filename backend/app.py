@@ -60,7 +60,8 @@ def login():
     email = data.get('email', '').strip().lower()
     if not email or not data.get('password'):
         return jsonify({'error': 'Correo y contraseña son obligatorios'}), 400
-    return jsonify({'user': {'email': email, 'name': email.split('@')[0], 'role': 'cliente'}})
+    role = 'admin' if email == os.environ.get('ADMIN_EMAIL') and data.get('password') == os.environ.get('ADMIN_PASSWORD') else 'cliente'
+    return jsonify({'user': {'email': email, 'name': email.split('@')[0], 'role': role}})
 
 @app.post('/api/auth/register')
 def register():

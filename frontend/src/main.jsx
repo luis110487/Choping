@@ -21,7 +21,8 @@ function App() {
     [cartOpen, setCartOpen] = useState(false),
     [loginOpen, setLoginOpen] = useState(false),
     [banner, setBanner] = useState(() => Number(localStorage.getItem("choping-banner") || 0)),
-    [adminOpen, setAdminOpen] = useState(false);
+    [adminOpen, setAdminOpen] = useState(false),
+    [user, setUser] = useState(null);
   useEffect(() => {
     fetch(`${API}/api/stores`)
       .then((r) => r.json())
@@ -71,9 +72,7 @@ function App() {
             <button className="nav-link" onClick={() => setLoginOpen(true)}>
               Login
             </button>
-            <button className="nav-link" onClick={() => setAdminOpen(true)}>
-              Banners
-            </button>
+            {user?.role === "admin" && <button className="nav-link" onClick={() => setAdminOpen(true)}>Panel administrativo</button>}
             <button className="nav-cart" onClick={() => setCartOpen(true)}>
               🛒 Carrito{" "}
               <small>
@@ -84,7 +83,6 @@ function App() {
           </nav>
         </div>
       </header>
-      {!store && <BannerSlider banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} />}
       <section className="shop-hero">
         <small>{store ? "TIENDA" : "DIRECTORIO DE TIENDAS"}</small>
         <h1>{store ? store.name : "Encuentra una tienda para comenzar"}</h1>
@@ -183,7 +181,7 @@ function App() {
       {cartOpen && (
         <CartModal cart={cart} total={total} close={() => setCartOpen(false)} />
       )}
-      {loginOpen && <LoginModal close={() => setLoginOpen(false)} />}
+      {loginOpen && <LoginModal close={() => setLoginOpen(false)} onLogin={(nextUser) => { setUser(nextUser); setLoginOpen(false); }} />}
       {adminOpen && <AdminBannerPanel stores={stores} banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} close={() => setAdminOpen(false)} />}
       <footer>
         Desarrollado por{" "}
@@ -291,9 +289,9 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
   const changeApproval = (name, value) => { const next = value ? [...new Set([...approved, name])] : approved.filter((item) => item !== name); setApproved(next); localStorage.setItem("choping-approved-stores", JSON.stringify(next)); };
   return <div className="overlay"><section className="cart-modal admin-banner-panel"><button className="modal-close" onClick={close}>×</button><div className="cart-modal-content"><small>PANEL ADMINISTRADOR</small><div className="admin-tabs"><button className={tab === "banners" ? "selected" : ""} onClick={() => setTab("banners")}>Banners</button><button className={tab === "stores" ? "selected" : ""} onClick={() => setTab("stores")}>Aprobación de tiendas</button></div>{tab === "banners" ? <><h2>Banner principal</h2><p>Selecciona el banner que deseas mostrar primero en la vista de tiendas.</p><div className="admin-banner-options">{images.map((image, i) => <button className={banner === i ? "selected" : ""} key={image} onClick={() => setBanner(i)}><img src={image} alt={`Banner ${i + 1}`} /><strong>Banner {i + 1}</strong></button>)}</div></> : <><h2>Tiendas pendientes</h2><p>Aprueba las tiendas que pueden aparecer en el directorio.</p><div className="admin-store-list">{stores.map((store) => <div className="admin-store-row" key={store.name}><div><strong>{store.name}</strong><small>{store.category} · {store.products.length} productos</small></div><button className={approved.includes(store.name) ? "approved" : ""} onClick={() => changeApproval(store.name, !approved.includes(store.name))}>{approved.includes(store.name) ? "Aprobada" : "Aprobar"}</button></div>)}</div></>}</div></section></div>;
 }
-function LoginModal({ close }) {
+function LoginModal({ close, onLogin }) {
   const [register, setRegister] = useState(false), [name, setName] = useState(""), [email, setEmail] = useState(""), [password, setPassword] = useState(""), [role, setRole] = useState("cliente"), [message, setMessage] = useState("");
-  const submit = async (e) => { e.preventDefault(); const endpoint = register ? "register" : "login"; const body = register ? { name, email, password, role } : { email, password }; const response = await fetch(`${API}/api/auth/${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const data = await response.json(); setMessage(response.ok ? (data.message || `Bienvenido, ${data.user.name}`) : data.error); };
+  const submit = async (e) => { e.preventDefault(); const endpoint = register ? "register" : "login"; const body = register ? { name, email, password, role } : { email, password }; const response = await fetch(`${API}/api/auth/${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const data = await response.json(); if (response.ok && !register) onLogin(data.user); setMessage(response.ok ? (data.message || `Bienvenido, ${data.user.name}`) : data.error); };
   return <div className="overlay"><section className="cart-modal"><button className="modal-close" onClick={close}>×</button><form className="cart-modal-content" onSubmit={submit}><small>ACCESO UNICO</small><h2>{register ? "Crear usuario" : "Iniciar sesión"}</h2>{register && <><label>Nombre completo<input value={name} onChange={(e) => setName(e.target.value)} required /></label><label>Tipo de usuario<select value={role} onChange={(e) => setRole(e.target.value)}><option value="cliente">Cliente</option><option value="tienda">Tienda</option></select></label></>}<label>Correo electrónico<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label><label>Contraseña<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>{message && <p>{message}</p>}<button className="btn cart-checkout">{register ? "Crear usuario" : "Ingresar"}</button><button type="button" className="nav-link" onClick={() => { setRegister(!register); setMessage(""); }}>{register ? "Ya tengo una cuenta" : "Crear usuario nuevo"}</button></form></section></div>;
 }
 createRoot(document.getElementById("root")).render(<App />);
