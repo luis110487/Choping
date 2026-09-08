@@ -69,7 +69,7 @@ function App() {
             <button className="nav-link" onClick={() => setLoginOpen(true)}>
               Login
             </button>
-            {user?.role === "admin" && <button className="nav-link" onClick={() => setAdminOpen(true)}>Panel administrativo</button>}
+            {(user?.role === "admin" || user?.role === "superadmin") && <button className="nav-link" onClick={() => setAdminOpen(true)}>Panel administrativo</button>}
             {user?.role === "tienda" && store && <button className="nav-link" onClick={() => setStoreAdminOpen(true)}>Personalizar tienda</button>}
             <button className="nav-cart" onClick={() => setCartOpen(true)}>
               🛒 Carrito{" "}
