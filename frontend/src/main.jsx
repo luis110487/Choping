@@ -24,7 +24,7 @@ function App() {
     [adminOpen, setAdminOpen] = useState(false),
     [user, setUser] = useState(null),
     [storeAdminOpen, setStoreAdminOpen] = useState(false),
-    [storeTheme, setStoreTheme] = useState(() => localStorage.getItem("choping-store-theme") || "ocean");
+    [storeThemes, setStoreThemes] = useState(() => JSON.parse(localStorage.getItem("choping-store-themes") || '{"Tech Zone":"ocean","Casa Viva":"sunset","EcoRuedas":"forest"}'));
   useEffect(() => {
     fetch(`${API}/api/stores`)
       .then((r) => r.json())
@@ -132,7 +132,7 @@ function App() {
           </div>
         </main>
       ) : (
-        <main className={`store-profile theme-${storeTheme}`}>
+        <main className={`store-profile theme-${storeThemes[store.name] || "ocean"}`}>
           <button className="back-link" onClick={() => setStore(null)}>
             ← Volver a tiendas
           </button>
@@ -187,7 +187,7 @@ function App() {
       )}
       {loginOpen && <LoginModal close={() => setLoginOpen(false)} onLogin={(nextUser) => { setUser(nextUser); setLoginOpen(false); }} />}
       {adminOpen && <AdminBannerPanel stores={stores} banner={banner} setBanner={(value) => { setBanner(value); localStorage.setItem("choping-banner", String(value)); }} close={() => setAdminOpen(false)} />}
-      {storeAdminOpen && <StoreCustomizer theme={storeTheme} setTheme={(value) => { setStoreTheme(value); localStorage.setItem("choping-store-theme", value); }} close={() => setStoreAdminOpen(false)} />}
+      {storeAdminOpen && <StoreCustomizer theme={storeThemes[store.name] || "ocean"} setTheme={(value) => { const next = { ...storeThemes, [store.name]: value }; setStoreThemes(next); localStorage.setItem("choping-store-themes", JSON.stringify(next)); }} close={() => setStoreAdminOpen(false)} />}
       <footer>
         Desarrollado por{" "}
         <a href="https://www.techdatasync.com">www.techdatasync.com</a>
