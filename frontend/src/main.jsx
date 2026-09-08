@@ -56,7 +56,7 @@ function App() {
     });
   const total = cart.reduce((s, p) => s + p.price * p.quantity, 0);
   return (
-    <>
+    <div className={store ? `store-app theme-${storeThemes[store.name] || "ocean"}` : "store-app"}>
       <header>
         <div className="nav">
           <a className="logo" href="#" onClick={() => setStore(null)}>
@@ -192,7 +192,7 @@ function App() {
         Desarrollado por{" "}
         <a href="https://www.techdatasync.com">www.techdatasync.com</a>
       </footer>
-    </>
+    </div>
   );
 }
 function ProductModal({ product, add, close }) {
