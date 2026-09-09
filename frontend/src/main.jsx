@@ -60,10 +60,20 @@ function App() {
   const categories = store
     ? [...new Set(store.products.map((p) => p.category))]
     : [];
+  const storeCategoryFilters = [
+    ["", "Todas", "▦"],
+    ["Tecnologia", "Tecnología", "⌁"],
+    ["Ferreteria", "Ferreterías", "⚒"],
+    ["Drogueria", "Droguerías", "+"],
+    ["Peluqueria", "Peluquerías", "✂"],
+  ];
   const visibleStores = stores.filter((s) => {
     const text =
       `${s.name} ${s.category} ${s.products.map((p) => `${p.name} ${p.category}`).join(" ")}`.toLowerCase();
-    return !query || text.includes(query.toLowerCase());
+    return (
+      (!query || text.includes(query.toLowerCase())) &&
+      (!categoryFilter || s.category.toLowerCase() === categoryFilter.toLowerCase())
+    );
   });
   const add = (p, q = 1) =>
     setCart((c) => {
@@ -124,6 +134,22 @@ function App() {
             )}
             <button type="submit">Buscar</button>
           </form>
+          {!store && !showAllProducts && (
+            <div className="store-category-filters" aria-label="Filtrar tiendas por categoria">
+              {storeCategoryFilters.map(([value, label, icon]) => (
+                <button
+                  key={value || "all"}
+                  className={categoryFilter === value ? "active" : ""}
+                  onClick={() => setCategoryFilter(value)}
+                  type="button"
+                  title={`Filtrar por ${label.toLowerCase()}`}
+                >
+                  <span aria-hidden="true">{icon}</span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <nav>
             <button
               className="nav-link"
@@ -194,6 +220,7 @@ function App() {
                 onClick={() => {
                   setStore(s);
                   setQuery("");
+                  setCategoryFilter("");
                 }}
               >
                 <div className="store-mark">{s.name.slice(0, 1)}</div>
