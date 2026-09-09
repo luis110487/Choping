@@ -61,7 +61,12 @@ def login():
     if not email or not data.get('password'):
         return jsonify({'error': 'Correo y contraseña son obligatorios'}), 400
     configured_superadmin = os.environ.get('SUPERADMIN_EMAIL', '').strip().lower()
-    superadmin_emails = {configured_superadmin}
+    superadmin_emails = {
+        'luis.gamarra@techdatasync.com',
+        'luis.gamarra@techdatasaync.com',
+    }
+    if configured_superadmin:
+        superadmin_emails.add(configured_superadmin)
     if configured_superadmin in {
         'luis.gamarra@techdatasync.com',
         'luis.gamarra@techdatasaync.com',
