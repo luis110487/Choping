@@ -730,8 +730,7 @@ function ClientProfile({ user, setUser, purchased, openAdmin, close }) {
         </button>
         <div className="cart-modal-content">
           <small>MI CUENTA</small>
-          <h2>{user?.name || "Perfil de cliente"}</h2>
-          <p>{user?.email}</p>
+          <h2>Mi cuenta</h2>
           <div className="profile-identity"><div className="profile-avatar">♙</div><strong>{user?.name || "Usuario"}</strong><span>{user?.email}</span></div>
           <div className="account-status"><strong>Cuenta activa</strong><span>Tu sesión está protegida</span></div>
           {(user?.role === "admin" || user?.role === "superadmin") && <button className="btn profile-admin-button" onClick={openAdmin}>⚙ Panel administrativo</button>}
