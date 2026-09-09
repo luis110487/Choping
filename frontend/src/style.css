@@ -20,3 +20,4 @@
 .review-modal{position:relative;right:auto;top:auto;bottom:auto;width:min(460px,100%);max-height:calc(100vh - 32px);border-radius:10px}.review-overlay{z-index:20}.rating-picker{display:flex;gap:5px;margin:8px 0 18px}.rating-picker button{padding:2px;background:transparent;color:#c7d1df;font-size:30px}.rating-picker button.chosen{color:#ffb703}.review-modal .cart-modal-content{min-height:auto}
 .profile-store-review{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border:1px solid #dbe5f4;border-radius:6px;background:#f3f8ff}
 .review-alert{padding:12px;border-left:4px solid #ffb703;border-radius:6px;background:#fff7df;color:#7a5200;font-weight:700;margin:8px 0 14px}
+.user-name{color:#063f9f;font-weight:700;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

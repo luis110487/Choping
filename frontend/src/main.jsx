@@ -108,8 +108,9 @@ function App() {
                   : setLoginOpen(true)
               }
             >
-              {user ? "Logout" : "Login"}
+            {user ? "Logout" : "Login"}
             </button>
+            {user && <span className="user-name">{user.name}</span>}
             {user?.role === "cliente" && (
               <button className="nav-link" onClick={() => { setProfileOpen(true); localStorage.setItem("choping-profile-open", "true"); }}>
               Mi perfil
@@ -294,6 +295,8 @@ function App() {
       )}
       {profileOpen && (
         <ClientProfile
+          user={user}
+          setUser={setUser}
           purchased={purchased}
           close={() => { setProfileOpen(false); localStorage.setItem("choping-profile-open", "false"); }}
         />
@@ -709,8 +712,8 @@ function StoreCustomizer({ theme, setTheme, close }) {
     </div>
   );
 }
-function ClientProfile({ purchased, close }) {
-  const [reviewProduct, setReviewProduct] = useState(null), [reviewStore, setReviewStore] = useState(null), [passwordOpen, setPasswordOpen] = useState(false), [refresh, setRefresh] = useState(0);
+function ClientProfile({ user, setUser, purchased, close }) {
+  const [reviewProduct, setReviewProduct] = useState(null), [reviewStore, setReviewStore] = useState(null), [passwordOpen, setPasswordOpen] = useState(false), [editOpen, setEditOpen] = useState(false), [refresh, setRefresh] = useState(0);
   const stores = [...new Set(purchased.map((product) => product.store))];
   const reviews = JSON.parse(localStorage.getItem("choping-reviews") || "{}");
   const storeReviews = JSON.parse(localStorage.getItem("choping-store-reviews") || "{}");
@@ -726,7 +729,9 @@ function ClientProfile({ purchased, close }) {
         </button>
         <div className="cart-modal-content">
           <small>MI CUENTA</small>
-          <h2>Perfil de cliente</h2>
+          <h2>{user?.name || "Perfil de cliente"}</h2>
+          <p>{user?.email}</p>
+          <button className="btn profile-password-button" onClick={() => setEditOpen(true)}>Editar información</button>
           {(pendingProducts.length > 0 || pendingStores.length > 0) && <div className="review-alert">Tienes reseñas pendientes de productos y tiendas que compraste.</div>}
           <button className="btn profile-password-button" onClick={() => setPasswordOpen(true)}>Cambiar contraseña</button>
           <div className="profile-section">
@@ -781,6 +786,7 @@ function ClientProfile({ purchased, close }) {
       )}
       {passwordOpen && <PasswordModal close={() => setPasswordOpen(false)} />}
       {reviewStore && <StoreReviewModal store={reviewStore} close={() => { dismiss(`store-${reviewStore}`); setReviewStore(null); }} onSaved={() => { setReviewStore(null); setRefresh(refresh + 1); }} />}
+      {editOpen && <EditProfileModal user={user} setUser={setUser} close={() => setEditOpen(false)} />}
     </div>
   );
 }
@@ -989,3 +995,4 @@ function LoginModal({ close, onLogin }) {
   );
 }
 createRoot(document.getElementById("root")).render(<App />);
+function EditProfileModal({ user, setUser, close }) { const [name, setName] = useState(user?.name || ""), [email, setEmail] = useState(user?.email || ""); const save = (e) => { e.preventDefault(); const next = { ...user, name, email }; setUser(next); localStorage.setItem("choping-user", JSON.stringify(next)); close(); }; return <div className="overlay review-overlay"><section className="cart-modal review-modal"><form className="cart-modal-content" onSubmit={save}><small>MI PERFIL</small><h2>Editar información</h2><label>Nombre<input value={name} onChange={(e) => setName(e.target.value)} required /></label><label>Correo electrónico<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label><button className="btn cart-checkout">Guardar cambios</button><button type="button" className="nav-link" onClick={close}>Cancelar</button></form></section></div>; }
