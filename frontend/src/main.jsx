@@ -75,6 +75,35 @@ function App() {
       (!categoryFilter || s.category.toLowerCase() === categoryFilter.toLowerCase())
     );
   });
+  const featuredStoreNames = ["Tech Zone", "Casa Viva"];
+  const featuredStores = visibleStores.filter(
+    (s) => s.featured || featuredStoreNames.includes(s.name),
+  );
+  const otherStores = visibleStores.filter(
+    (s) => !s.featured && !featuredStoreNames.includes(s.name),
+  );
+  const renderStoreCards = (items, featured = false) =>
+    items.map((s) => (
+      <article
+        className={`store-card${featured ? " featured-store-card" : ""}`}
+        key={s.name}
+        onClick={() => {
+          setStore(s);
+          setQuery("");
+          setCategoryFilter("");
+        }}
+      >
+        <div className="store-mark">{s.name.slice(0, 1)}</div>
+        <div>
+          {featured && <span className="featured-label">Destacada</span>}
+          <small>{s.category}</small>
+          <h2>{s.name}</h2>
+          <Stars value={s.rating} />
+          <p>{s.products.length} productos disponibles</p>
+          <button className="btn">Ver tienda</button>
+        </div>
+      </article>
+    ));
   const add = (p, q = 1) =>
     setCart((c) => {
       const x = c.find((i) => i.id === p.id);
@@ -202,43 +231,40 @@ function App() {
           </nav>
         </div>
       </header>
-      <BannerSlider
-        storeName={store?.name}
-        banner={banner}
-        setBanner={(value) => {
-          setBanner(value);
-          localStorage.setItem("choping-banner", String(value));
-        }}
-      />
+      <section className="banner-section" aria-label="Banners destacados">
+        <BannerSlider
+          storeName={store?.name}
+          banner={banner}
+          setBanner={(value) => {
+            setBanner(value);
+            localStorage.setItem("choping-banner", String(value));
+          }}
+        />
+      </section>
       {!store && !showAllProducts ? (
         <main>
-          <div className="store-grid">
-            {visibleStores.map((s) => (
-              <article
-                className="store-card"
-                key={s.name}
-                onClick={() => {
-                  setStore(s);
-                  setQuery("");
-                  setCategoryFilter("");
-                }}
-              >
-                <div className="store-mark">{s.name.slice(0, 1)}</div>
-                <div>
-                  <small>{s.category}</small>
-                  <h2>{s.name}</h2>
-                  <Stars value={s.rating} />
-                  <p>{s.products.length} productos disponibles</p>
-                  <button className="btn">Ver tienda</button>
-                </div>
-              </article>
-            ))}
-            {!visibleStores.length && (
-              <p className="empty-products">
-                No encontramos tiendas con esa búsqueda.
-              </p>
-            )}
-          </div>
+          {featuredStores.length > 0 && (
+            <section className="store-directory-section">
+              <div className="store-section-heading">
+                <small>SELECCIÓN CHOPING</small>
+                <h1>Tiendas destacadas</h1>
+                <p>Descubre tiendas recomendadas y sus productos más populares.</p>
+              </div>
+              <div className="store-grid">{renderStoreCards(featuredStores, true)}</div>
+            </section>
+          )}
+          {otherStores.length > 0 && (
+            <section className="store-directory-section other-stores-section">
+              <div className="store-section-heading">
+                <small>DIRECTORIO DE TIENDAS</small>
+                <h2>Más tiendas para explorar</h2>
+              </div>
+              <div className="store-grid">{renderStoreCards(otherStores)}</div>
+            </section>
+          )}
+          {!visibleStores.length && (
+            <p className="empty-products">No encontramos tiendas con esa búsqueda.</p>
+          )}
         </main>
       ) : (
         <main

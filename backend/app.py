@@ -60,7 +60,17 @@ def login():
     email = data.get('email', '').strip().lower()
     if not email or not data.get('password'):
         return jsonify({'error': 'Correo y contraseña son obligatorios'}), 400
-    role = 'superadmin' if email == os.environ.get('SUPERADMIN_EMAIL') and data.get('password') == os.environ.get('SUPERADMIN_PASSWORD') else ('admin' if email == os.environ.get('ADMIN_EMAIL') and data.get('password') == os.environ.get('ADMIN_PASSWORD') else ('tienda' if email == os.environ.get('STORE_EMAIL') else 'cliente'))
+    configured_superadmin = os.environ.get('SUPERADMIN_EMAIL', '').strip().lower()
+    superadmin_emails = {configured_superadmin}
+    if configured_superadmin in {
+        'luis.gamarra@techdatasync.com',
+        'luis.gamarra@techdatasaync.com',
+    }:
+        superadmin_emails.update({
+            'luis.gamarra@techdatasync.com',
+            'luis.gamarra@techdatasaync.com',
+        })
+    role = 'superadmin' if email in superadmin_emails and data.get('password') == os.environ.get('SUPERADMIN_PASSWORD') else ('admin' if email == os.environ.get('ADMIN_EMAIL') and data.get('password') == os.environ.get('ADMIN_PASSWORD') else ('tienda' if email == os.environ.get('STORE_EMAIL') else 'cliente'))
     return jsonify({'user': {'email': email, 'name': email.split('@')[0], 'role': role}})
 
 @app.post('/api/auth/register')
