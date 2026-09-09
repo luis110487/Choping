@@ -530,7 +530,7 @@ function BannerSlider({ storeName, banner, setBanner }) {
     return () => clearInterval(timer);
   }, [banner, setBanner]);
   return (
-    <section className="banner-slider">
+    <section className={`banner-slider ${storeName ? "store-banner" : "home-banner"}`}>
       <img
         className="banner-image"
         src={images[banner]}
