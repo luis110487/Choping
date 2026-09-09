@@ -86,6 +86,35 @@ function App() {
           <a className="logo" href="#" onClick={() => setStore(null)}>
             <img src={`${API}/static/img/choping-logo.png`} alt="Choping" />
           </a>
+          <form
+            className="header-search"
+            onSubmit={(e) => e.preventDefault()}
+          >
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={
+                store ? "Buscar en esta tienda" : "Buscar productos o tiendas"
+              }
+              aria-label="Buscar productos o tiendas"
+            />
+            {store && (
+              <select
+                className="category-filter"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                aria-label="Filtrar por categoria"
+              >
+                <option value="">Todas las categorias</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button type="submit">Buscar</button>
+          </form>
           <nav>
             <button
               className="nav-link"
@@ -147,54 +176,6 @@ function App() {
           localStorage.setItem("choping-banner", String(value));
         }}
       />
-      <section className="shop-hero">
-        <small>
-          {store
-            ? "TIENDA"
-            : showAllProducts
-              ? "CATALOGO GLOBAL"
-              : "DIRECTORIO DE TIENDAS"}
-        </small>
-        <h1>
-          {store
-            ? store.name
-            : showAllProducts
-              ? "Todos los productos"
-              : "Encuentra una tienda para comenzar"}
-        </h1>
-        <p>
-          {store
-            ? "Explora los productos disponibles de esta tienda."
-            : showAllProducts
-              ? "Explora productos de todas las tiendas en un solo lugar."
-              : "Conoce nuestros vendedores y entra a cada tienda para ver su catálogo."}
-        </p>
-        <form className="product-search" onSubmit={(e) => e.preventDefault()}>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={
-              store ? "Buscar en esta tienda" : "Buscar productos o tiendas"
-            }
-          />
-          {store && (
-            <select
-              className="category-filter"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              aria-label="Filtrar por categoria"
-            >
-              <option value="">Todas las categorias</option>
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          )}
-          <button>Buscar</button>
-        </form>
-      </section>
       {!store && !showAllProducts ? (
         <main>
           <div className="store-grid">
@@ -733,6 +714,7 @@ function ClientProfile({ user, setUser, purchased, openAdmin, close }) {
           <h2>Mi cuenta</h2>
           <div className="profile-identity"><div className="profile-avatar">♙</div><strong>{user?.name || "Usuario"}</strong><span>{user?.email}</span></div>
           <div className="account-status"><strong>Cuenta activa</strong><span>Tu sesión está protegida</span></div>
+          <div className="profile-shortcuts"><button onClick={() => document.querySelector('.profile-section')?.scrollIntoView({ behavior: 'smooth' })}><strong>▣</strong><b>Mis pedidos</b><span>Consulta el estado de tus compras ›</span></button><button onClick={() => document.querySelector('.profile-stores')?.scrollIntoView({ behavior: 'smooth' })}><strong>▤</strong><b>Tiendas</b><span>Tus tiendas favoritas y seguidas ›</span></button><button onClick={() => document.querySelector('.profile-review')?.scrollIntoView({ behavior: 'smooth' })}><strong>★</strong><b>Reseñar productos</b><span>Comparte tu opinión y ayuda a otros ›</span></button></div>
           {(user?.role === "admin" || user?.role === "superadmin") && <button className="btn profile-admin-button" onClick={openAdmin}>⚙ Panel administrativo</button>}
           <button className="btn profile-password-button" onClick={() => setEditOpen(true)}>Editar información</button>
           {(pendingProducts.length > 0 || pendingStores.length > 0) && <div className="review-alert">Tienes reseñas pendientes de productos y tiendas que compraste.</div>}
