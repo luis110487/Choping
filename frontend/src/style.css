@@ -21,3 +21,4 @@
 .profile-store-review{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border:1px solid #dbe5f4;border-radius:6px;background:#f3f8ff}
 .review-alert{padding:12px;border-left:4px solid #ffb703;border-radius:6px;background:#fff7df;color:#7a5200;font-weight:700;margin:8px 0 14px}
 .user-name{color:#063f9f;font-weight:700;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profile-identity{display:grid;justify-items:center;gap:5px;padding:12px 0 20px}.profile-avatar{display:grid;place-items:center;width:58px;height:58px;border-radius:50%;background:#d8ecff;color:#063f9f;font-size:32px}.profile-identity span{font-size:13px;color:#63718b}.account-status{display:grid;gap:5px;padding:14px;margin-bottom:12px;border-radius:6px;background:#e6f8eb;color:#26734d}.account-status span{font-size:13px}.profile-admin-button{width:100%;margin-bottom:10px}

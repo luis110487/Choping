@@ -298,6 +298,7 @@ function App() {
           user={user}
           setUser={setUser}
           purchased={purchased}
+          openAdmin={() => { setProfileOpen(false); setAdminOpen(true); }}
           close={() => { setProfileOpen(false); localStorage.setItem("choping-profile-open", "false"); }}
         />
       )}
@@ -712,7 +713,7 @@ function StoreCustomizer({ theme, setTheme, close }) {
     </div>
   );
 }
-function ClientProfile({ user, setUser, purchased, close }) {
+function ClientProfile({ user, setUser, purchased, openAdmin, close }) {
   const [reviewProduct, setReviewProduct] = useState(null), [reviewStore, setReviewStore] = useState(null), [passwordOpen, setPasswordOpen] = useState(false), [editOpen, setEditOpen] = useState(false), [refresh, setRefresh] = useState(0);
   const stores = [...new Set(purchased.map((product) => product.store))];
   const reviews = JSON.parse(localStorage.getItem("choping-reviews") || "{}");
@@ -731,6 +732,9 @@ function ClientProfile({ user, setUser, purchased, close }) {
           <small>MI CUENTA</small>
           <h2>{user?.name || "Perfil de cliente"}</h2>
           <p>{user?.email}</p>
+          <div className="profile-identity"><div className="profile-avatar">♙</div><strong>{user?.name || "Usuario"}</strong><span>{user?.email}</span></div>
+          <div className="account-status"><strong>Cuenta activa</strong><span>Tu sesión está protegida</span></div>
+          {(user?.role === "admin" || user?.role === "superadmin") && <button className="btn profile-admin-button" onClick={openAdmin}>⚙ Panel administrativo</button>}
           <button className="btn profile-password-button" onClick={() => setEditOpen(true)}>Editar información</button>
           {(pendingProducts.length > 0 || pendingStores.length > 0) && <div className="review-alert">Tienes reseñas pendientes de productos y tiendas que compraste.</div>}
           <button className="btn profile-password-button" onClick={() => setPasswordOpen(true)}>Cambiar contraseña</button>
