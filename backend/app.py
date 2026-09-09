@@ -2,6 +2,7 @@ import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-only-change-me')
@@ -41,11 +42,85 @@ def health():
 @app.get('/api/products')
 def products():
     query = request.args.get('q', '').strip().lower()
+    catalog = database_catalog()
+    if catalog is not None:
+        all_products = [p for store in catalog for p in store['products']]
+        return jsonify([p for p in all_products if not query or query in f"{p['name']} {p['category']} {p['description']} {p['store']}".lower()])
     result = [p for p in DEMO_PRODUCTS if not query or query in f"{p['name']} {p['category']} {p['description']} {p['store']}".lower()]
     return jsonify(result)
 
+def database_catalog():
+    if not os.environ.get('DATABASE_URL'):
+        return None
+    try:
+        store_rows = db.session.execute(text('''
+            select id, name, owner_name, category, city, description, rating
+            from stores
+            where approved is true
+            order by created_at asc, id asc
+        ''')).mappings().all()
+        product_rows = db.session.execute(text('''
+            select p.id, p.store_id, p.name, p.category, p.description, p.story,
+                   p.price, p.image, p.rating, p.review, p.likes, p.purchases
+            from products p
+            join stores s on s.id = p.store_id
+            where s.approved is true
+            order by p.created_at asc, p.id asc
+        ''')).mappings().all()
+        image_rows = db.session.execute(text('''
+            select product_id, image_url, position
+            from product_images
+            order by product_id, position
+        ''')).mappings().all()
+        images_by_product = {}
+        for image in image_rows:
+            images_by_product.setdefault(image['product_id'], []).append(image['image_url'])
+        stores_by_id = {}
+        result = []
+        for row in store_rows:
+            store = {
+                'id': row['id'],
+                'name': row['name'],
+                'owner_name': row['owner_name'],
+                'category': row['category'],
+                'city': row['city'],
+                'description': row['description'],
+                'rating': float(row['rating'] or 0),
+                'products': [],
+            }
+            stores_by_id[row['id']] = store
+            result.append(store)
+        for row in product_rows:
+            store = stores_by_id.get(row['store_id'])
+            if not store:
+                continue
+            product_images = images_by_product.get(row['id'], [])
+            image = row['image'] or (product_images[0] if product_images else '')
+            store['products'].append({
+                'id': row['id'],
+                'name': row['name'],
+                'category': row['category'],
+                'description': row['description'] or '',
+                'story': row['story'] or '',
+                'price': float(row['price'] or 0),
+                'image': image,
+                'images': product_images or ([image] * 3 if image else []),
+                'rating': float(row['rating'] or 0),
+                'review': row['review'] or '',
+                'likes': row['likes'] or 0,
+                'purchases': row['purchases'] or 0,
+                'store': store['name'],
+            })
+        return result
+    except Exception:
+        db.session.rollback()
+        return None
+
 @app.get('/api/stores')
 def stores():
+    catalog = database_catalog()
+    if catalog is not None:
+        return jsonify(catalog)
     result=[]
     for p in DEMO_PRODUCTS:
         store=next((s for s in result if s['name']==p['store']),None)

@@ -620,7 +620,7 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
     "/banner-home-2.png",
     "/banner-home-3.png",
   ];
-  const [tab, setTab] = useState("banners"),
+  const [tab, setTab] = useState("summary"),
     [approved, setApproved] = useState(() =>
       JSON.parse(localStorage.getItem("choping-approved-stores") || "[]"),
     );
@@ -641,6 +641,12 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
           <small>PANEL ADMINISTRADOR</small>
           <div className="admin-tabs">
             <button
+              className={tab === "summary" ? "selected" : ""}
+              onClick={() => setTab("summary")}
+            >
+              Resumen
+            </button>
+            <button
               className={tab === "banners" ? "selected" : ""}
               onClick={() => setTab("banners")}
             >
@@ -652,8 +658,30 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
             >
               Aprobación de tiendas
             </button>
+            <button
+              className={tab === "products" ? "selected" : ""}
+              onClick={() => setTab("products")}
+            >
+              Productos
+            </button>
           </div>
-          {tab === "banners" ? (
+          {tab === "summary" ? (
+            <>
+              <h2>Resumen administrativo</h2>
+              <div className="admin-summary-grid">
+                <div><strong>{stores.length}</strong><span>Tiendas registradas</span></div>
+                <div><strong>{stores.filter((store) => approved.includes(store.name) || !approved.length).length}</strong><span>Tiendas aprobadas</span></div>
+                <div><strong>{stores.reduce((total, store) => total + store.products.length, 0)}</strong><span>Productos publicados</span></div>
+              </div>
+              <div className="admin-roles">
+                <h3>Roles del sistema</h3>
+                <p><b>Superadmin:</b> configuración global y control administrativo.</p>
+                <p><b>Admin:</b> banners, tiendas y productos.</p>
+                <p><b>Tienda:</b> catálogo, categorías y personalización de su tienda.</p>
+                <p><b>Cliente:</b> compras, pedidos y reseñas verificadas.</p>
+              </div>
+            </>
+          ) : tab === "banners" ? (
             <>
               <h2>Banner principal</h2>
               <p>
@@ -673,7 +701,7 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
                 ))}
               </div>
             </>
-          ) : (
+          ) : tab === "stores" ? (
             <>
               <h2>Tiendas pendientes</h2>
               <p>Aprueba las tiendas que pueden aparecer en el directorio.</p>
@@ -701,6 +729,22 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
                     </button>
                   </div>
                 ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <h2>Productos publicados</h2>
+              <p>Consulta el catálogo agrupado por tienda.</p>
+              <div className="admin-store-list">
+                {stores.flatMap((store) => store.products.map((product) => (
+                  <div className="admin-store-row" key={`${store.name}-${product.id}`}>
+                    <div>
+                      <strong>{product.name}</strong>
+                      <small>{store.name} · {product.category} · {money(product.price)}</small>
+                    </div>
+                    <span className="admin-product-status">Publicado</span>
+                  </div>
+                )))}
               </div>
             </>
           )}
