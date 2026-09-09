@@ -73,6 +73,15 @@ function App() {
         : [...c, { ...p, quantity: q }];
     });
   const total = cart.reduce((s, p) => s + p.price * p.quantity, 0);
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem("choping-user");
+    localStorage.removeItem("choping-profile-open");
+    setProfileOpen(false);
+    setAdminOpen(false);
+    setStoreAdminOpen(false);
+  };
+  const userInitial = (user?.name || user?.email || "U").slice(0, 1).toUpperCase();
   return (
     <div
       className={
@@ -126,23 +135,22 @@ function App() {
             >
               Tiendas
             </button>
-            <button
-              className="nav-link"
-              onClick={() =>
-                user
-                  ? (setUser(null), localStorage.removeItem("choping-user"), localStorage.removeItem("choping-profile-open"),
-                    setProfileOpen(false),
-                    setAdminOpen(false),
-                    setStoreAdminOpen(false))
-                  : setLoginOpen(true)
-              }
-            >
-            {user ? "Logout" : "Login"}
-            </button>
-            {user && <span className="user-name">{user.name}</span>}
-            {user?.role === "cliente" && (
-              <button className="nav-link" onClick={() => { setProfileOpen(true); localStorage.setItem("choping-profile-open", "true"); }}>
-              Mi perfil
+            {!user && (
+              <button className="nav-link" onClick={() => setLoginOpen(true)}>
+                Login
+              </button>
+            )}
+            {user && (
+              <button
+                className="user-avatar-button"
+                onClick={() => {
+                  setProfileOpen(true);
+                  localStorage.setItem("choping-profile-open", "true");
+                }}
+                aria-label="Abrir mi perfil"
+                title="Mi perfil"
+              >
+                {userInitial}
               </button>
             )}
             {(user?.role === "admin" || user?.role === "superadmin") && (
@@ -280,6 +288,7 @@ function App() {
           setUser={setUser}
           purchased={purchased}
           openAdmin={() => { setProfileOpen(false); setAdminOpen(true); }}
+          logout={logout}
           close={() => { setProfileOpen(false); localStorage.setItem("choping-profile-open", "false"); }}
         />
       )}
@@ -694,7 +703,7 @@ function StoreCustomizer({ theme, setTheme, close }) {
     </div>
   );
 }
-function ClientProfile({ user, setUser, purchased, openAdmin, close }) {
+function ClientProfile({ user, setUser, purchased, openAdmin, logout, close }) {
   const [reviewProduct, setReviewProduct] = useState(null), [reviewStore, setReviewStore] = useState(null), [passwordOpen, setPasswordOpen] = useState(false), [editOpen, setEditOpen] = useState(false), [refresh, setRefresh] = useState(0);
   const stores = [...new Set(purchased.map((product) => product.store))];
   const reviews = JSON.parse(localStorage.getItem("choping-reviews") || "{}");
@@ -712,13 +721,14 @@ function ClientProfile({ user, setUser, purchased, openAdmin, close }) {
         <div className="cart-modal-content">
           <small>MI CUENTA</small>
           <h2>Mi cuenta</h2>
-          <div className="profile-identity"><div className="profile-avatar">♙</div><strong>{user?.name || "Usuario"}</strong><span>{user?.email}</span></div>
+          <div className="profile-identity"><div className="profile-avatar">{(user?.name || user?.email || "U").slice(0, 1).toUpperCase()}</div><strong>{user?.name || "Usuario"}</strong><span>{user?.email}</span></div>
           <div className="account-status"><strong>Cuenta activa</strong><span>Tu sesión está protegida</span></div>
           <div className="profile-shortcuts"><button onClick={() => document.querySelector('.profile-section')?.scrollIntoView({ behavior: 'smooth' })}><strong>▣</strong><b>Mis pedidos</b><span>Consulta el estado de tus compras ›</span></button><button onClick={() => document.querySelector('.profile-stores')?.scrollIntoView({ behavior: 'smooth' })}><strong>▤</strong><b>Tiendas</b><span>Tus tiendas favoritas y seguidas ›</span></button><button onClick={() => document.querySelector('.profile-review')?.scrollIntoView({ behavior: 'smooth' })}><strong>★</strong><b>Reseñar productos</b><span>Comparte tu opinión y ayuda a otros ›</span></button></div>
           {(user?.role === "admin" || user?.role === "superadmin") && <button className="btn profile-admin-button" onClick={openAdmin}>⚙ Panel administrativo</button>}
           <button className="btn profile-password-button" onClick={() => setEditOpen(true)}>Editar información</button>
           {(pendingProducts.length > 0 || pendingStores.length > 0) && <div className="review-alert">Tienes reseñas pendientes de productos y tiendas que compraste.</div>}
           <button className="btn profile-password-button" onClick={() => setPasswordOpen(true)}>Cambiar contraseña</button>
+          <button className="profile-logout-button" onClick={logout}>Cerrar sesión</button>
           <div className="profile-section">
             <h3>Mis pedidos</h3>
             {purchased.length ? (
