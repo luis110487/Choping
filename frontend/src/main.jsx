@@ -5,6 +5,19 @@ const API = (import.meta.env.VITE_API_URL || "http://127.0.0.1:5000")
   .replace(/\/$/, "")
   .replace(/\/api$/, "");
 const money = (n) => "$" + Number(n).toLocaleString("es-CO");
+const SUPERADMIN_EMAILS = new Set([
+  "luis.gamarra@techdatasync.com",
+  "luis.gamarra@techdatasaync.com",
+  "luis.gamarra@techdatasyn.com",
+]);
+const isPlatformAdmin = (account) =>
+  account &&
+  (["admin", "superadmin"].includes(account.role) ||
+    SUPERADMIN_EMAILS.has((account.email || "").trim().toLowerCase()));
+const normalizeAccount = (account) =>
+  account && isPlatformAdmin(account)
+    ? { ...account, role: "superadmin" }
+    : account;
 const Stars = ({ value }) => (
   <span className="stars">
     ★★★★★ <b>{value}</b>
@@ -29,7 +42,7 @@ function App() {
       Number(localStorage.getItem("choping-banner") || 0),
     ),
     [adminOpen, setAdminOpen] = useState(false),
-    [user, setUser] = useState(() => JSON.parse(localStorage.getItem("choping-user") || "null")),
+    [user, setUser] = useState(() => normalizeAccount(JSON.parse(localStorage.getItem("choping-user") || "null"))),
     [profileOpen, setProfileOpen] = useState(() => localStorage.getItem("choping-profile-open") === "true"),
     [storeAdminOpen, setStoreAdminOpen] = useState(false),
     [storeThemes, setStoreThemes] = useState(() =>
@@ -208,7 +221,7 @@ function App() {
                 {userInitial}
               </button>
             )}
-            {(user?.role === "admin" || user?.role === "superadmin") && (
+            {isPlatformAdmin(user) && (
               <button className="nav-link" onClick={() => setAdminOpen(true)}>
                 Panel administrativo
               </button>
@@ -329,8 +342,9 @@ function App() {
         <LoginModal
           close={() => setLoginOpen(false)}
           onLogin={(nextUser) => {
-            setUser(nextUser);
-            localStorage.setItem("choping-user", JSON.stringify(nextUser));
+            const normalizedUser = normalizeAccount(nextUser);
+            setUser(normalizedUser);
+            localStorage.setItem("choping-user", JSON.stringify(normalizedUser));
             setLoginOpen(false);
           }}
         />
@@ -827,7 +841,7 @@ function ClientProfile({ user, setUser, purchased, openAdmin, logout, close }) {
           <div className="profile-identity"><div className="profile-avatar">{(user?.name || user?.email || "U").slice(0, 1).toUpperCase()}</div><strong>{user?.name || "Usuario"}</strong><span>{user?.email}</span></div>
           <div className="account-status"><strong>Cuenta activa</strong><span>Tu sesión está protegida</span></div>
           <div className="profile-shortcuts"><button onClick={() => document.querySelector('.profile-section')?.scrollIntoView({ behavior: 'smooth' })}><strong>▣</strong><b>Mis pedidos</b><span>Consulta el estado de tus compras ›</span></button><button onClick={() => document.querySelector('.profile-stores')?.scrollIntoView({ behavior: 'smooth' })}><strong>▤</strong><b>Tiendas</b><span>Tus tiendas favoritas y seguidas ›</span></button><button onClick={() => document.querySelector('.profile-review')?.scrollIntoView({ behavior: 'smooth' })}><strong>★</strong><b>Reseñar productos</b><span>Comparte tu opinión y ayuda a otros ›</span></button></div>
-          {(user?.role === "admin" || user?.role === "superadmin") && <button className="btn profile-admin-button" onClick={openAdmin}>⚙ Panel administrativo</button>}
+          {isPlatformAdmin(user) && <button className="btn profile-admin-button" onClick={openAdmin}>⚙ Panel administrativo</button>}
           <button className="btn profile-password-button" onClick={() => setEditOpen(true)}>Editar información</button>
           {(pendingProducts.length > 0 || pendingStores.length > 0) && <div className="review-alert">Tienes reseñas pendientes de productos y tiendas que compraste.</div>}
           <button className="btn profile-password-button" onClick={() => setPasswordOpen(true)}>Cambiar contraseña</button>
