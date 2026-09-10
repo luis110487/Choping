@@ -632,11 +632,29 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
     localStorage.setItem("choping-approved-stores", JSON.stringify(next));
   };
   return (
-    <div className="overlay">
-      <section className="cart-modal admin-banner-panel">
+    <div className="overlay admin-overlay">
+      <section className="admin-dashboard-panel">
+        <aside className="admin-sidebar">
+          <div className="admin-brand"><strong>CHOPING</strong><span>Administración global</span></div>
+          <button className={tab === "summary" ? "active" : ""} onClick={() => setTab("summary")}>⌂ <span>Dashboard</span></button>
+          <small>GESTIÓN GENERAL</small>
+          <button className={tab === "stores" ? "active" : ""} onClick={() => setTab("stores")}>▣ <span>Tiendas</span></button>
+          <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>◇ <span>Productos</span></button>
+          <button onClick={() => setTab("summary")}>▦ <span>Categorías</span></button>
+          <button onClick={() => setTab("stores")}>⚑ <span>Solicitudes</span></button>
+          <small>CONFIGURACIÓN</small>
+          <button onClick={() => setTab("summary")}>⚙ <span>Roles y permisos</span></button>
+          <button onClick={() => setTab("banners")}>▤ <span>Publicidad / Banners</span></button>
+          <div className="admin-sidebar-footer">Sesión de superadministrador</div>
+        </aside>
+        <div className="admin-main">
         <button className="modal-close" onClick={close}>
           ×
         </button>
+        <header className="admin-dashboard-header">
+          <div><small>CONTROL DE PLATAFORMA</small><h1>Hola, Super Administrador</h1><p>Gestiona tiendas, productos, contenido y permisos desde un solo lugar.</p></div>
+          <span className="admin-date">Panel general</span>
+        </header>
         <div className="cart-modal-content">
           <small>PANEL ADMINISTRADOR</small>
           <div className="admin-tabs">
@@ -748,6 +766,7 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
               </div>
             </>
           )}
+        </div>
         </div>
       </section>
     </div>
