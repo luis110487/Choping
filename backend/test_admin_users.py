@@ -139,6 +139,32 @@ class AdminUserProvisioningTests(unittest.TestCase):
         mock_user_id.assert_called_once_with('casaviva@gmail.com')
         mock_profile_sync.assert_called_once_with('existing-supabase-user-id', 'tienda')
 
+    @patch('app.sync_profile_role', return_value=False)
+    @patch('app.urlopen')
+    def test_store_account_is_saved_when_profile_sync_needs_attention(self, mock_urlopen, _mock_profile_sync):
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"id":"supabase-user-id","email":"casaviva@gmail.com"}'
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+        login = self.client.post('/api/auth/login', json={
+            'email': 'luis.gamarra@techdatasync.com',
+            'password': 'test-superadmin-password',
+        })
+        response = self.client.post(
+            '/api/admin/users',
+            headers={'Authorization': f"Bearer {login.get_json()['access_token']}"},
+            json={
+                'name': 'Casa Viva',
+                'email': 'casaviva@gmail.com',
+                'password': 'Casa123',
+                'role': 'tienda',
+                'store_name': 'Casa Viva',
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.get_json().get('warning'))
+        self.assertIsNotNone(LocalUser.query.filter_by(email='casaviva@gmail.com').first())
+
 
 if __name__ == '__main__':
     unittest.main()

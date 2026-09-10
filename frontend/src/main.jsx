@@ -855,7 +855,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     setNewUserRole("cliente");
     setNewUserStore("");
     setEditingUser(null);
-    setUserMessage(editingUser ? "Usuario actualizado correctamente." : "Usuario creado correctamente.");
+    setUserMessage(result.warning || (editingUser ? "Usuario actualizado correctamente." : "Usuario creado correctamente."));
   };
   const editUser = (account) => {
     setEditingUser(account.email);

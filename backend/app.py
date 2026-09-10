@@ -410,8 +410,9 @@ def create_admin_user():
         if not existing_user_id:
             return jsonify({'error': error}), 409
         supabase_user = {'id': existing_user_id}
+    profile_warning = None
     if not sync_profile_role(supabase_user['id'], role):
-        return jsonify({'error': 'Se creó la cuenta, pero no fue posible asignar su rol. Verifica la tabla profiles.'}), 500
+        profile_warning = 'La cuenta se creó; el rol se administrará desde Choping mientras se revisa la tabla profiles.'
     if account:
         account.name = name
         account.password_hash = generate_password_hash(password)
@@ -427,7 +428,10 @@ def create_admin_user():
         )
         db.session.add(account)
     db.session.commit()
-    return jsonify({'user': {'name': name, 'email': email, 'role': role, 'store_name': store_name}}), 201
+    response = {'user': {'name': name, 'email': email, 'role': role, 'store_name': store_name}}
+    if profile_warning:
+        response['warning'] = profile_warning
+    return jsonify(response), 201
 
 @app.put('/api/admin/users/<path:email>')
 def update_admin_user(email):
@@ -456,10 +460,14 @@ def update_admin_user(email):
     if password:
         account.password_hash = generate_password_hash(password)
     auth_user_id = auth_user_id_by_email(account.email)
+    profile_warning = None
     if auth_user_id and not sync_profile_role(auth_user_id, role):
-        return jsonify({'error': 'No fue posible actualizar el rol en profiles.'}), 500
+        profile_warning = 'El rol quedó actualizado en Choping; no se pudo sincronizar profiles.'
     db.session.commit()
-    return jsonify({'user': {'name': account.name, 'email': account.email, 'role': account.role, 'store_name': account.store_name}})
+    response = {'user': {'name': account.name, 'email': account.email, 'role': account.role, 'store_name': account.store_name}}
+    if profile_warning:
+        response['warning'] = profile_warning
+    return jsonify(response)
 
 @app.post('/api/auth/register')
 def register():
