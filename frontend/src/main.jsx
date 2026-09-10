@@ -715,6 +715,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     ),
     [newUserName, setNewUserName] = useState(""),
     [newUserEmail, setNewUserEmail] = useState(""),
+    [newUserPassword, setNewUserPassword] = useState(""),
     [newUserRole, setNewUserRole] = useState("cliente"),
     [newUserStore, setNewUserStore] = useState(""),
     [userMessage, setUserMessage] = useState("");
@@ -797,7 +798,10 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     event.preventDefault();
     const name = newUserName.trim();
     const email = newUserEmail.trim().toLowerCase();
-    if (!name || !email) return;
+    if (!name || !email || newUserPassword.length < 6) {
+      setUserMessage("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
     if (newUserRole === "tienda" && !newUserStore) {
       setUserMessage("Selecciona la tienda que tendrá asignada este usuario.");
       return;
@@ -816,6 +820,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     localStorage.setItem("choping-registered-users", JSON.stringify(next));
     setNewUserName("");
     setNewUserEmail("");
+    setNewUserPassword("");
     setNewUserRole("cliente");
     setNewUserStore("");
     setUserMessage("Usuario creado correctamente.");
@@ -937,6 +942,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
               <form className="admin-user-form" onSubmit={saveUser}>
                 <label>Nombre completo<input value={newUserName} onChange={(event) => setNewUserName(event.target.value)} required /></label>
                 <label>Correo electrónico<input type="email" value={newUserEmail} onChange={(event) => setNewUserEmail(event.target.value)} required /></label>
+                <label>Contraseña<input type="password" value={newUserPassword} onChange={(event) => setNewUserPassword(event.target.value)} minLength="6" required /></label>
                 <label>Rol<select value={newUserRole} onChange={(event) => { setNewUserRole(event.target.value); setNewUserStore(""); }}><option value="cliente">Cliente</option><option value="tienda">Tienda</option><option value="admin">Administrador</option><option value="superadmin">Superadmin</option></select></label>
                 {newUserRole === "tienda" && <label>Tienda asignada<select value={newUserStore} onChange={(event) => setNewUserStore(event.target.value)} required><option value="">Selecciona una tienda</option>{stores.map((store) => <option key={store.name} value={store.name}>{store.name} · {store.city || "Colombia"}</option>)}</select></label>}
                 <button className="btn" type="submit">Crear usuario</button>
