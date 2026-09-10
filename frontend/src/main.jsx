@@ -1335,6 +1335,8 @@ function LoginModal({ close, onLogin, currentStore = "" }) {
         ...registeredUsers.filter((item) => item.email !== nextUser.email),
         nextUser,
       ]));
+      onLogin(data.user, data.access_token);
+      return;
     }
     if (response.ok && !register) onLogin(data.user, data.access_token);
     setMessage(

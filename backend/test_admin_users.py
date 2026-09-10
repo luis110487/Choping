@@ -165,6 +165,26 @@ class AdminUserProvisioningTests(unittest.TestCase):
         self.assertTrue(response.get_json().get('warning'))
         self.assertIsNotNone(LocalUser.query.filter_by(email='casaviva@gmail.com').first())
 
+    @patch('app.sync_profile_role', return_value=True)
+    @patch('app.urlopen')
+    def test_public_registration_creates_auth_identity_and_session(self, mock_urlopen, _mock_profile_sync):
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"id":"new-supabase-user-id","email":"cliente@gmail.com"}'
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        response = self.client.post('/api/auth/register', json={
+            'name': 'Cliente nuevo',
+            'email': 'cliente@gmail.com',
+            'password': 'Clave123',
+            'role': 'cliente',
+            'phone': '3001234567',
+        })
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.get_json().get('access_token'))
+        self.assertTrue(mock_urlopen.called)
+        self.assertIsNotNone(LocalUser.query.filter_by(email='cliente@gmail.com').first())
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -484,19 +484,42 @@ def register():
         return jsonify({'error': 'El telefono es obligatorio para clientes'}), 400
     if role == 'tienda' and not all(data.get(field, '').strip() for field in ('store_name', 'category', 'city', 'description')):
         return jsonify({'error': 'Las tiendas deben indicar nombre, categoria, ciudad y descripcion'}), 400
-    if LocalUser.query.filter_by(email=email).first():
-        return jsonify({'error': 'Ya existe un usuario con ese correo'}), 409
-    account = LocalUser(
-        name=name,
-        email=email,
-        password_hash=generate_password_hash(password),
-        role=role,
-        phone=data.get('phone', '').strip(),
-        store_name=data.get('store_name', '').strip(),
-    )
-    db.session.add(account)
+    account = LocalUser.query.filter_by(email=email).first()
+    if account and not check_password_hash(account.password_hash, password):
+        return jsonify({'error': 'Ya existe un usuario con ese correo. Inicia sesión o usa otra contraseña.'}), 409
+    store_name = data.get('store_name', '').strip()
+    supabase_user, error = create_supabase_user(email, password, name, role, store_name)
+    if error:
+        if 'registered' not in error.lower():
+            return jsonify({'error': error}), 502
+        existing_user_id = auth_user_id_by_email(email)
+        if not existing_user_id:
+            return jsonify({'error': error}), 409
+        supabase_user = {'id': existing_user_id}
+    profile_warning = None
+    if not sync_profile_role(supabase_user['id'], role):
+        profile_warning = 'La cuenta se creó; el perfil se terminará de sincronizar cuando se revise profiles.'
+    if account:
+        account.name = name
+        account.role = role
+        account.phone = data.get('phone', '').strip()
+        account.store_name = store_name
+    else:
+        account = LocalUser(
+            name=name,
+            email=email,
+            password_hash=generate_password_hash(password),
+            role=role,
+            phone=data.get('phone', '').strip(),
+            store_name=store_name,
+        )
+        db.session.add(account)
     db.session.commit()
-    return jsonify({'user': {'name': name, 'email': email, 'role': role, 'phone': account.phone, 'store_name': account.store_name}, 'message': 'Usuario creado correctamente'}), 201
+    user = {'name': name, 'email': email, 'role': role, 'phone': account.phone, 'store_name': account.store_name}
+    response = {'user': user, 'access_token': access_token_for(user), 'message': 'Usuario creado correctamente'}
+    if profile_warning:
+        response['warning'] = profile_warning
+    return jsonify(response), 201
 
 with app.app_context():
     db.create_all()
