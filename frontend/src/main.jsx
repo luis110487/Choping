@@ -357,6 +357,7 @@ function App() {
       {loginOpen && (
         <LoginModal
           close={() => setLoginOpen(false)}
+          currentStore={store?.name || ""}
           onLogin={(nextUser) => {
             const normalizedUser = normalizeAccount(nextUser);
             setUser(normalizedUser);
@@ -1146,14 +1147,14 @@ function ReviewModal({ product, close, onSaved }) {
     </div>
   );
 }
-function LoginModal({ close, onLogin }) {
+function LoginModal({ close, onLogin, currentStore = "" }) {
   const [register, setRegister] = useState(false),
     [name, setName] = useState(""),
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [role, setRole] = useState("cliente"),
     [phone, setPhone] = useState(""),
-    [storeName, setStoreName] = useState(""),
+    [storeName, setStoreName] = useState(currentStore),
     [category, setCategory] = useState(""),
     [city, setCity] = useState(""),
     [description, setDescription] = useState(""),
