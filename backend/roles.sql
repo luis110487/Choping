@@ -12,12 +12,14 @@ alter table public.profiles
 
 create index if not exists profiles_role_idx on public.profiles(role);
 
--- Asigna el superadmin existente. La contraseña continúa administrándose
--- mediante SUPERADMIN_PASSWORD en Render hasta integrar Supabase Auth.
-update public.profiles
+-- Asigna el superadmin existente mediante auth.users, porque profiles
+-- normalmente guarda el correo en esa tabla y solo relaciona el id.
+update public.profiles p
 set role = 'superadmin'
-where lower(email) in (
-  'luis.gamarra@techdatasync.com',
-  'luis.gamarra@techdatasaync.com',
-  'luis.gamarra@techdatasyn.com'
-);
+from auth.users u
+where p.id = u.id
+  and lower(u.email) in (
+    'luis.gamarra@techdatasync.com',
+    'luis.gamarra@techdatasaync.com',
+    'luis.gamarra@techdatasyn.com'
+  );

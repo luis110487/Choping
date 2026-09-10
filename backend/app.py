@@ -133,10 +133,23 @@ def profile_role(email):
     if not os.environ.get('DATABASE_URL'):
         return None
     try:
-        row = db.session.execute(
-            text('select role from public.profiles where lower(email) = :email limit 1'),
-            {'email': email},
-        ).mappings().first()
+        try:
+            row = db.session.execute(
+                text('select role from public.profiles where lower(email) = :email limit 1'),
+                {'email': email},
+            ).mappings().first()
+        except Exception:
+            db.session.rollback()
+            row = db.session.execute(
+                text('''
+                    select p.role
+                    from public.profiles p
+                    join auth.users u on u.id = p.id
+                    where lower(u.email) = :email
+                    limit 1
+                '''),
+                {'email': email},
+            ).mappings().first()
         role = row['role'] if row else None
         return role if role in ('cliente', 'tienda', 'admin', 'superadmin') else None
     except Exception:
