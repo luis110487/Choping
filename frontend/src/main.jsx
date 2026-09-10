@@ -975,6 +975,18 @@ function StoreAdminPanel({ store, theme, setTheme, close }) {
   ];
   const [tab, setTab] = useState("home");
   const products = store?.products || [];
+  const registeredClients = JSON.parse(localStorage.getItem("choping-registered-users") || "[]")
+    .filter((account) => account.role === "cliente" && account.store_name?.toLowerCase() === store?.name?.toLowerCase());
+  const maskedEmail = (email = "") => {
+    const [name, domain] = email.split("@");
+    return name && domain ? `${name.slice(0, 2)}***@${domain}` : "Contacto protegido";
+  };
+  const maskedPhone = (phone = "") => phone.length > 4 ? `${"*".repeat(Math.max(0, phone.length - 4))}${phone.slice(-4)}` : "Contacto protegido";
+  const totalPurchases = products.reduce((total, product) => total + Number(product.purchases || 0), 0);
+  const averageRating = products.length
+    ? (products.reduce((total, product) => total + Number(product.rating || 0), 0) / products.length).toFixed(1)
+    : "0.0";
+  const productCategories = new Set(products.map((product) => product.category)).size;
   return (
     <div className="overlay store-admin-overlay">
       <section className="store-admin-panel">
@@ -983,6 +995,7 @@ function StoreAdminPanel({ store, theme, setTheme, close }) {
           <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")}>⌂ <span>Inicio</span></button>
           <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>◇ <span>Productos</span></button>
           <button className={tab === "store" ? "active" : ""} onClick={() => setTab("store")}>▣ <span>Mi tienda</span></button>
+          <button className={tab === "clients" ? "active" : ""} onClick={() => setTab("clients")}>♙ <span>Clientes</span></button>
           <button onClick={() => setTab("home")}>◌ <span>Consultas</span></button>
           <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>⚙ <span>Configuración</span></button>
           <div className="store-admin-sidebar-footer"><button onClick={close}>↩ <span>Cerrar panel</span></button></div>
@@ -990,8 +1003,9 @@ function StoreAdminPanel({ store, theme, setTheme, close }) {
         <div className="store-admin-main">
           <button className="modal-close" onClick={close}>×</button>
           <header className="store-admin-header"><div><small>MI TIENDA</small><h1>¡Hola!</h1><p>Gestiona {store?.name || "tu tienda"} desde un solo lugar.</p></div><div className="store-admin-account"><span>{store?.name?.slice(0, 1) || "T"}</span><strong>{store?.name || "Mi tienda"}</strong></div></header>
-          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>0</strong><span>Visitas a tu tienda</span></div><div><strong>0</strong><span>Consultas recibidas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => setTab("products")}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={`${API}/static/img/${product.image}`} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`} onClick={() => setTab("products")}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark">{store?.name?.slice(0, 1) || "T"}</div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
+          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras registradas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategories}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => setTab("products")}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={`${API}/static/img/${product.image}`} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)} · {product.purchases || 0} compras</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`} onClick={() => setTab("products")}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark">{store?.name?.slice(0, 1) || "T"}</div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
           {tab === "products" && <div className="store-admin-content"><h2>Productos de {store?.name}</h2><p>Administra el catálogo y revisa los productos publicados.</p><div className="store-admin-list">{products.map((product) => <div className="store-product-row" key={product.id}><img src={`${API}/static/img/${product.image}`} alt="" /><div><strong>{product.name}</strong><small>{product.category} · {money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`}>✎</button><button aria-label={`Eliminar ${product.name}`}>⌫</button></div>)}</div></div>}
+          {tab === "clients" && <div className="store-admin-content"><h2>Clientes de {store?.name}</h2><p>Clientes vinculados a esta tienda. Los datos de contacto se muestran protegidos.</p><div className="store-admin-list">{registeredClients.length ? registeredClients.map((client) => <div className="store-client-row" key={client.email}><span className="store-client-avatar">{(client.name || client.email).slice(0, 1).toUpperCase()}</span><div><strong>{client.name || "Cliente"}</strong><small>{maskedEmail(client.email)}</small></div><span>{maskedPhone(client.phone)}</span></div>) : <div className="store-admin-empty"><strong>Aún no hay clientes vinculados</strong><span>Los clientes asociados a esta tienda aparecerán aquí.</span></div>}</div></div>}
           {tab === "store" && <div className="store-admin-content"><h2>Información de mi tienda</h2><p>Consulta y actualiza la información visible para tus clientes.</p><div className="store-edit-grid"><label>Nombre de la tienda<input defaultValue={store?.name || ""} /></label><label>Categoría<input defaultValue={store?.category || ""} /></label><label>Ciudad<input defaultValue={store?.city || ""} /></label><label>Descripción<textarea defaultValue={store?.description || ""} /></label></div><button className="btn">Guardar información</button></div>}
           {tab === "settings" && <div className="store-admin-content"><small>PERSONALIZACIÓN</small><h2>Diseña tu perfil</h2><p>Elige una plantilla para organizar tu tienda.</p><div className="theme-options">{themes.map((item) => <button key={item.id} className={`theme-option theme-${item.id} ${theme === item.id ? "selected" : ""}`} onClick={() => setTheme(item.id)}><span className="theme-preview" /><strong>{item.name}</strong><small>{item.detail}</small></button>)}</div><h3>Contenido de la tienda</h3><label>Logo de la tienda<input type="file" accept="image/*" /></label><label>Banners superiores (hasta 3)<input type="file" accept="image/*" multiple /></label><p className="form-hint">Los cambios visuales se aplican inmediatamente a tu perfil.</p></div>}
         </div>
@@ -1166,6 +1180,14 @@ function LoginModal({ close, onLogin }) {
       body: JSON.stringify(body),
     });
     const data = await response.json();
+    if (response.ok && register) {
+      const registeredUsers = JSON.parse(localStorage.getItem("choping-registered-users") || "[]");
+      const nextUser = { ...data.user, phone, store_name: storeName };
+      localStorage.setItem("choping-registered-users", JSON.stringify([
+        ...registeredUsers.filter((item) => item.email !== nextUser.email),
+        nextUser,
+      ]));
+    }
     if (response.ok && !register) onLogin(data.user);
     setMessage(
       response.ok
