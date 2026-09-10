@@ -165,6 +165,25 @@ function App() {
     setProfileOpen(false);
     setStoreAdminOpen(true);
   };
+  const createStoreProduct = async (draft) => {
+    const authToken = localStorage.getItem("choping-auth-token");
+    if (!authToken) throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
+    const response = await fetch(`${API}/api/store/products`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify(draft),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "No fue posible crear el producto.");
+    const product = result.product;
+    setStores((current) => current.map((item) =>
+      item.name === product.store ? { ...item, products: [...item.products, product] } : item,
+    ));
+    setStore((current) =>
+      current?.name === product.store ? { ...current, products: [...current.products, product] } : current,
+    );
+    return product;
+  };
   return (
     <div
       className={
@@ -439,6 +458,7 @@ function App() {
         <StoreAdminPanel
           store={store}
           theme={storeThemes[store.name] || "ocean"}
+          createProduct={createStoreProduct}
           setTheme={(value) => {
             const next = { ...storeThemes, [store.name]: value };
             setStoreThemes(next);
@@ -1110,7 +1130,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     </div>
   );
 }
-function StoreAdminPanel({ store, theme, setTheme, close }) {
+function StoreAdminPanel({ store, theme, setTheme, createProduct, close }) {
   const themes = [
     { id: "ocean", name: "Ocean", detail: "Azul, limpia y tecnológica" },
     { id: "sunset", name: "Sunset", detail: "Cálida y comercial" },
@@ -1118,6 +1138,9 @@ function StoreAdminPanel({ store, theme, setTheme, close }) {
     { id: "mono", name: "Minimal", detail: "Elegante y sobria" },
   ];
   const [tab, setTab] = useState("home");
+  const [addingProduct, setAddingProduct] = useState(false);
+  const [productDraft, setProductDraft] = useState({ name: "", category: store?.category || "", price: "", description: "", story: "", image: "" });
+  const [productMessage, setProductMessage] = useState("");
   const products = store?.products || [];
   const registeredClients = JSON.parse(localStorage.getItem("choping-registered-users") || "[]")
     .filter((account) => account.role === "cliente" && account.store_name?.toLowerCase() === store?.name?.toLowerCase());
@@ -1135,6 +1158,18 @@ function StoreAdminPanel({ store, theme, setTheme, close }) {
     ? (products.reduce((total, product) => total + Number(product.rating || 0), 0) / products.length).toFixed(1)
     : "0.0";
   const productCategories = new Set(products.map((product) => product.category)).size;
+  const showProductForm = () => { setAddingProduct(true); setProductMessage(""); };
+  const saveProduct = async (event) => {
+    event.preventDefault();
+    try {
+      await createProduct(productDraft);
+      setProductDraft({ name: "", category: store?.category || "", price: "", description: "", story: "", image: "" });
+      setAddingProduct(false);
+      setProductMessage("Producto creado y publicado en tu catálogo.");
+    } catch (error) {
+      setProductMessage(error.message || "No fue posible crear el producto.");
+    }
+  };
   return (
     <div className="overlay store-admin-overlay">
       <section className="store-admin-panel">
@@ -1151,8 +1186,8 @@ function StoreAdminPanel({ store, theme, setTheme, close }) {
         <div className="store-admin-main">
           <button className="modal-close" onClick={close}>×</button>
           <header className="store-admin-header"><div><small>MI TIENDA</small><h1>¡Hola!</h1><p>Gestiona {store?.name || "tu tienda"} desde un solo lugar.</p></div><div className="store-admin-account"><span>{store?.name?.slice(0, 1) || "T"}</span><strong>{store?.name || "Mi tienda"}</strong></div></header>
-          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras confirmadas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategories}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => setTab("products")}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={`${API}/static/img/${product.image}`} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`} onClick={() => setTab("products")}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark"><span>{store?.name?.slice(0, 1) || "T"}</span></div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
-          {tab === "products" && <div className="store-admin-content"><h2>Productos de {store?.name}</h2><p>Administra el catálogo y revisa los productos publicados.</p><div className="store-admin-list">{products.map((product) => <div className="store-product-row" key={product.id}><img src={`${API}/static/img/${product.image}`} alt="" /><div><strong>{product.name}</strong><small>{product.category} · {money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`}>✎</button><button aria-label={`Eliminar ${product.name}`}>⌫</button></div>)}</div></div>}
+          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras confirmadas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategories}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => { setTab("products"); showProductForm(); }}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={`${API}/static/img/${product.image}`} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`} onClick={() => setTab("products")}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark"><span>{store?.name?.slice(0, 1) || "T"}</span></div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
+          {tab === "products" && <div className="store-admin-content"><div className="store-admin-title"><div><h2>Productos de {store?.name}</h2><p>Administra el catálogo y revisa los productos publicados.</p></div><button className="btn" onClick={showProductForm}>＋ Agregar producto</button></div>{addingProduct && <form className="store-product-form" onSubmit={saveProduct}><label>Nombre del producto<input value={productDraft.name} onChange={(event) => setProductDraft({ ...productDraft, name: event.target.value })} required /></label><label>Categoría<input value={productDraft.category} onChange={(event) => setProductDraft({ ...productDraft, category: event.target.value })} required /></label><label>Precio<input type="number" min="1" value={productDraft.price} onChange={(event) => setProductDraft({ ...productDraft, price: event.target.value })} required /></label><label>Imagen<input value={productDraft.image} onChange={(event) => setProductDraft({ ...productDraft, image: event.target.value })} placeholder="products/mi-producto.png" /></label><label className="store-product-wide">Descripción<textarea value={productDraft.description} onChange={(event) => setProductDraft({ ...productDraft, description: event.target.value })} required /></label><label className="store-product-wide">Historia del producto<textarea value={productDraft.story} onChange={(event) => setProductDraft({ ...productDraft, story: event.target.value })} /></label><div className="store-product-form-actions"><button className="btn">Guardar producto</button><button type="button" onClick={() => setAddingProduct(false)}>Cancelar</button></div></form>}{productMessage && <p className="store-product-message">{productMessage}</p>}<div className="store-admin-list">{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={`${API}/static/img/${product.image}`} alt="" /><div><strong>{product.name}</strong><small>{product.category} · {money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`}>✎</button><button aria-label={`Eliminar ${product.name}`}>⌫</button></div>) : <div className="store-admin-empty"><strong>No hay productos aún</strong><span>Agrega el primer producto de tu catálogo.</span></div>}</div></div>}
           {tab === "clients" && <div className="store-admin-content"><h2>Clientes de {store?.name}</h2><p>Clientes vinculados a esta tienda. Los datos de contacto se muestran protegidos.</p><div className="store-admin-list">{registeredClients.length ? registeredClients.map((client) => <div className="store-client-row" key={client.email}><span className="store-client-avatar">{(client.name || client.email).slice(0, 1).toUpperCase()}</span><div><strong>{client.name || "Cliente"}</strong><small>{maskedEmail(client.email)}</small></div><span>{maskedPhone(client.phone)}</span></div>) : <div className="store-admin-empty"><strong>Aún no hay clientes vinculados</strong><span>Los clientes asociados a esta tienda aparecerán aquí.</span></div>}</div></div>}
           {tab === "store" && <div className="store-admin-content"><h2>Información de mi tienda</h2><p>Consulta y actualiza la información visible para tus clientes.</p><div className="store-edit-grid"><label>Nombre de la tienda<input defaultValue={store?.name || ""} /></label><label>Categoría<input defaultValue={store?.category || ""} /></label><label>Ciudad<input defaultValue={store?.city || ""} /></label><label>Descripción<textarea defaultValue={store?.description || ""} /></label></div><button className="btn">Guardar información</button></div>}
           {tab === "settings" && <div className="store-admin-content"><small>PERSONALIZACIÓN</small><h2>Diseña tu perfil</h2><p>Elige una plantilla para organizar tu tienda.</p><div className="theme-options">{themes.map((item) => <button key={item.id} className={`theme-option theme-${item.id} ${theme === item.id ? "selected" : ""}`} onClick={() => setTheme(item.id)}><span className="theme-preview" /><strong>{item.name}</strong><small>{item.detail}</small></button>)}</div><h3>Contenido de la tienda</h3><label>Logo de la tienda<input type="file" accept="image/*" /></label><label>Banners superiores (hasta 3)<input type="file" accept="image/*" multiple /></label><p className="form-hint">Los cambios visuales se aplican inmediatamente a tu perfil.</p></div>}

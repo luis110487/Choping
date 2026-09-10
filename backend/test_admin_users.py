@@ -1,6 +1,7 @@
 import os
 import unittest
 from unittest.mock import MagicMock, patch
+from werkzeug.security import generate_password_hash
 
 os.environ['DATABASE_URL'] = 'sqlite://'
 os.environ['SECRET_KEY'] = 'test-secret-key'
@@ -206,6 +207,46 @@ class AdminUserProvisioningTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 201)
         mock_workspace.assert_called_once_with('TDS', 'Responsable TDS', 'Tecnologia', 'Barranquilla', 'Software')
+
+    @patch('app.create_catalog_product', create=True)
+    def test_store_user_can_create_a_product_for_its_own_store(self, mock_create_product):
+        db.session.add(LocalUser(
+            name='Casa Viva',
+            email='casaviva@gmail.com',
+            password_hash=generate_password_hash('Clave123'),
+            role='tienda',
+            store_name='Casa Viva',
+        ))
+        db.session.commit()
+        mock_create_product.return_value = ({
+            'id': 101,
+            'name': 'Mesa auxiliar',
+            'category': 'Hogar',
+            'price': 180000,
+            'description': 'Mesa de madera',
+            'image': 'products/licuadora-ninja.png',
+            'store': 'Casa Viva',
+            'rating': 0,
+            'images': ['products/licuadora-ninja.png'],
+        }, None)
+        login = self.client.post('/api/auth/login', json={
+            'email': 'casaviva@gmail.com',
+            'password': 'Clave123',
+        })
+        response = self.client.post(
+            '/api/store/products',
+            headers={'Authorization': f"Bearer {login.get_json()['access_token']}"},
+            json={
+                'name': 'Mesa auxiliar',
+                'category': 'Hogar',
+                'price': 180000,
+                'description': 'Mesa de madera',
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()['product']['store'], 'Casa Viva')
+        mock_create_product.assert_called_once()
 
 
 if __name__ == '__main__':

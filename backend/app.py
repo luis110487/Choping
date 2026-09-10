@@ -173,6 +173,51 @@ def ensure_store_workspace(name, owner_name, category, city, description):
         db.session.rollback()
         return False, 'No fue posible preparar el espacio de trabajo de la tienda.'
 
+def create_catalog_product(store_name, data):
+    try:
+        store_row = db.session.execute(
+            text('select id from stores where lower(name) = lower(:name) limit 1'),
+            {'name': store_name},
+        ).mappings().first()
+        if not store_row:
+            return None, 'No encontramos la tienda asociada a tu cuenta.'
+        image = data.get('image', '').strip() or 'products/pc-gamer.png'
+        product_row = db.session.execute(
+            text('''
+                insert into products (store_id, name, category, description, story, price, image, rating, review, likes, purchases)
+                values (:store_id, :name, :category, :description, :story, :price, :image, 0, '', 0, 0)
+                returning id
+            '''),
+            {
+                'store_id': store_row['id'],
+                'name': data['name'],
+                'category': data['category'],
+                'description': data.get('description', ''),
+                'story': data.get('story', ''),
+                'price': data['price'],
+                'image': image,
+            },
+        ).mappings().first()
+        db.session.commit()
+        return {
+            'id': product_row['id'],
+            'name': data['name'],
+            'category': data['category'],
+            'description': data.get('description', ''),
+            'story': data.get('story', ''),
+            'price': data['price'],
+            'image': image,
+            'images': [image],
+            'rating': 0,
+            'review': '',
+            'likes': 0,
+            'purchases': 0,
+            'store': store_name,
+        }, None
+    except Exception:
+        db.session.rollback()
+        return None, 'No fue posible guardar el producto.'
+
 @app.get('/api/stores')
 def stores():
     catalog = database_catalog(request.args.get('include_pending') == 'true')
@@ -322,9 +367,10 @@ def access_token_for(user):
         'email': user['email'],
         'role': user['role'],
         'name': user.get('name', ''),
+        'store_name': user.get('store_name', ''),
     })
 
-def authenticated_actor():
+def authenticated_session():
     authorization = request.headers.get('Authorization', '')
     if not authorization.startswith('Bearer '):
         return None
@@ -335,7 +381,11 @@ def authenticated_actor():
         )
     except (BadSignature, SignatureExpired):
         return None
-    return actor if actor.get('role') in {'admin', 'superadmin'} else None
+    return actor if actor.get('role') in VALID_ROLES else None
+
+def authenticated_actor():
+    actor = authenticated_session()
+    return actor if actor and actor.get('role') in {'admin', 'superadmin'} else None
 
 def login_response(user):
     return jsonify({'user': user, 'access_token': access_token_for(user)})
@@ -431,6 +481,35 @@ def login():
         if email in emails and expected_password and data['password'] == expected_password:
             return login_response({'email': email, 'name': email.split('@')[0], 'role': role})
     return jsonify({'error': 'Correo o contraseña incorrectos'}), 401
+
+@app.post('/api/store/products')
+def create_store_product():
+    actor = authenticated_session()
+    if not actor or actor.get('role') != 'tienda':
+        return jsonify({'error': 'Solo la cuenta administradora de la tienda puede crear productos.'}), 403
+    data = request.get_json(silent=True) or {}
+    name = data.get('name', '').strip()
+    category = data.get('category', '').strip()
+    description = data.get('description', '').strip()
+    if not name or not category:
+        return jsonify({'error': 'Nombre y categoría son obligatorios.'}), 400
+    try:
+        price = float(data.get('price', 0))
+    except (TypeError, ValueError):
+        price = 0
+    if price <= 0:
+        return jsonify({'error': 'Indica un precio mayor a cero.'}), 400
+    product, error = create_catalog_product(actor.get('store_name', ''), {
+        'name': name,
+        'category': category,
+        'description': description,
+        'story': data.get('story', '').strip(),
+        'price': price,
+        'image': data.get('image', '').strip(),
+    })
+    if error:
+        return jsonify({'error': error}), 404 if 'tienda' in error.lower() else 500
+    return jsonify({'product': product}), 201
 
 @app.post('/api/admin/users')
 def create_admin_user():
