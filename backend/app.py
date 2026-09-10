@@ -52,7 +52,7 @@ DEMO_PRODUCTS = [
     {'name': 'Bicicleta electrica urbana', 'category': 'Movilidad', 'price': 2800000, 'description': 'Bicicleta electrica ligera para recorridos diarios por la ciudad.', 'image': 'products/moto-electrica.png', 'store': 'EcoRuedas', 'rating': 4.7},
 ]
 for product in DEMO_PRODUCTS:
-    product.update({'story': f"Seleccionado para quienes buscan una compra practica en {product['category'].lower()}.", 'review': 'Excelente calidad, compra recomendada por la comunidad Choping.', 'likes': 120, 'purchases': 24, 'images': [product['image'], product['image'], product['image']]})
+    product.update({'story': f"Seleccionado para quienes buscan una compra practica en {product['category'].lower()}.", 'review': 'Excelente calidad, compra recomendada por la comunidad Choping.', 'likes': 120, 'purchases': 24, 'stock': 12, 'original_price': None, 'images': [product['image'], product['image'], product['image']]})
 
 @app.get('/api/health')
 def health():
@@ -77,6 +77,7 @@ def database_catalog(include_pending=False):
     if not os.environ.get('DATABASE_URL'):
         return None
     try:
+        ensure_product_schema()
         store_query = '''
             select id, name, owner_name, category, city, description, rating, approved
             from stores
@@ -86,7 +87,7 @@ def database_catalog(include_pending=False):
         store_rows = db.session.execute(text(store_query)).mappings().all()
         product_query = '''
             select p.id, p.store_id, p.name, p.category, p.description, p.story,
-                   p.price, p.image, p.rating, p.review, p.likes, p.purchases
+                   p.price, p.original_price, p.stock, p.image, p.rating, p.review, p.likes, p.purchases
             from products p
             join stores s on s.id = p.store_id
             {store_filter}
@@ -130,6 +131,8 @@ def database_catalog(include_pending=False):
                 'description': row['description'] or '',
                 'story': row['story'] or '',
                 'price': float(row['price'] or 0),
+                'original_price': float(row['original_price']) if row['original_price'] is not None else None,
+                'stock': row['stock'] if row['stock'] is not None else 0,
                 'image': image,
                 'images': product_images or ([image] * 3 if image else []),
                 'rating': float(row['rating'] or 0),
@@ -177,8 +180,21 @@ def ensure_store_workspace(name, owner_name, category, city, description):
         db.session.rollback()
         return False, 'No fue posible preparar el espacio de trabajo de la tienda.'
 
+def ensure_product_schema():
+    if not os.environ.get('DATABASE_URL'):
+        return False
+    try:
+        db.session.execute(text('alter table public.products add column if not exists stock integer not null default 10 check (stock >= 0)'))
+        db.session.execute(text('alter table public.products add column if not exists original_price numeric(14,2) check (original_price is null or original_price >= 0)'))
+        db.session.commit()
+        return True
+    except Exception:
+        db.session.rollback()
+        return False
+
 def create_catalog_product(store_name, data):
     try:
+        ensure_product_schema()
         store_row = db.session.execute(
             text('select id from stores where lower(name) = lower(:name) limit 1'),
             {'name': store_name},
@@ -188,8 +204,8 @@ def create_catalog_product(store_name, data):
         image = data.get('image', '').strip() or 'products/pc-gamer.png'
         product_row = db.session.execute(
             text('''
-                insert into products (store_id, name, category, description, story, price, image, rating, review, likes, purchases)
-                values (:store_id, :name, :category, :description, :story, :price, :image, 0, '', 0, 0)
+                insert into products (store_id, name, category, description, story, price, original_price, stock, image, rating, review, likes, purchases)
+                values (:store_id, :name, :category, :description, :story, :price, :original_price, :stock, :image, 0, '', 0, 0)
                 returning id
             '''),
             {
@@ -199,6 +215,8 @@ def create_catalog_product(store_name, data):
                 'description': data.get('description', ''),
                 'story': data.get('story', ''),
                 'price': data['price'],
+                'original_price': data.get('original_price'),
+                'stock': data['stock'],
                 'image': image,
             },
         ).mappings().first()
@@ -210,6 +228,8 @@ def create_catalog_product(store_name, data):
             'description': data.get('description', ''),
             'story': data.get('story', ''),
             'price': data['price'],
+            'original_price': data.get('original_price'),
+            'stock': data['stock'],
             'image': image,
             'images': [image],
             'rating': 0,
@@ -525,12 +545,30 @@ def create_store_product():
         price = 0
     if price <= 0:
         return jsonify({'error': 'Indica un precio mayor a cero.'}), 400
+    try:
+        stock = int(data.get('stock', 0))
+    except (TypeError, ValueError):
+        stock = -1
+    if stock < 0:
+        return jsonify({'error': 'El stock debe ser cero o un número mayor.'}), 400
+    original_price_value = data.get('original_price')
+    if original_price_value in (None, ''):
+        original_price = None
+    else:
+        try:
+            original_price = float(original_price_value)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'El precio anterior no es válido.'}), 400
+        if original_price <= price:
+            return jsonify({'error': 'El precio anterior debe ser mayor que el precio actual.'}), 400
     product, error = create_catalog_product(actor.get('store_name', ''), {
         'name': name,
         'category': category,
         'description': description,
         'story': data.get('story', '').strip(),
         'price': price,
+        'original_price': original_price,
+        'stock': stock,
         'image': data.get('image', '').strip(),
     })
     if error:

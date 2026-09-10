@@ -242,13 +242,16 @@ class AdminUserProvisioningTests(unittest.TestCase):
                 'name': 'Mesa auxiliar',
                 'category': 'Hogar',
                 'price': 180000,
+                'original_price': 220000,
+                'stock': 8,
                 'description': 'Mesa de madera',
             },
         )
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.get_json()['product']['store'], 'Casa Viva')
-        mock_create_product.assert_called_once()
+        self.assertEqual(mock_create_product.call_args.args[1]['stock'], 8)
+        self.assertEqual(mock_create_product.call_args.args[1]['original_price'], 220000)
 
     def test_store_user_can_upload_a_product_image(self):
         db.session.add(LocalUser(

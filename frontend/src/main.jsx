@@ -7,6 +7,15 @@ const API = (import.meta.env.VITE_API_URL || "http://127.0.0.1:5000")
 const money = (n) => "$" + Number(n).toLocaleString("es-CO");
 const productImageUrl = (image) =>
   image && /^(https?:)?\/\//i.test(image) ? image : `${API}/static/img/${image || "products/pc-gamer.png"}`;
+const defaultProductCategories = ["Tecnologia", "Hogar", "Movilidad", "Moda"];
+const configuredCategories = () => {
+  try {
+    const categories = JSON.parse(localStorage.getItem("choping-categories") || "null");
+    return Array.isArray(categories) && categories.length ? categories.map((category) => category.name) : defaultProductCategories;
+  } catch {
+    return defaultProductCategories;
+  }
+};
 const SUPERADMIN_EMAILS = new Set([
   "luis.gamarra@techdatasync.com",
   "luis.gamarra@techdatasaync.com",
@@ -142,10 +151,12 @@ function App() {
     ));
   const add = (p, q = 1) =>
     setCart((c) => {
+      const stock = Number(p.stock ?? Number.POSITIVE_INFINITY);
+      if (stock <= 0) return c;
       const x = c.find((i) => i.id === p.id);
       return x
-        ? c.map((i) => (i.id === p.id ? { ...i, quantity: i.quantity + q } : i))
-        : [...c, { ...p, quantity: q }];
+        ? c.map((i) => (i.id === p.id ? { ...i, quantity: Math.min(stock, i.quantity + q) } : i))
+        : [...c, { ...p, quantity: Math.min(stock, q) }];
     });
   const total = cart.reduce((s, p) => s + p.price * p.quantity, 0);
   const logout = () => {
@@ -364,17 +375,21 @@ function App() {
                   <Stars value={p.rating} />
                   <p>{p.description}</p>
                   <div className="product-meta">
-                    <strong>{money(p.price)}</strong>
-                    <span>{p.purchases || 0} compras</span>
+                    <div className="product-price-stack">
+                      {Number(p.original_price) > Number(p.price) && <del>{money(p.original_price)}</del>}
+                      <strong>{money(p.price)}</strong>
+                    </div>
+                    <span className={Number(p.stock) <= 0 ? "stock-out" : "stock-available"}>{Number(p.stock) <= 0 ? "Agotado" : `${p.stock} disponibles`}</span>
                   </div>
                   <button
                     className="btn add-cart"
+                    disabled={Number(p.stock) <= 0}
                     onClick={(e) => {
                       e.stopPropagation();
                       add(p);
                     }}
                   >
-                    Agregar al carrito
+                    {Number(p.stock) <= 0 ? "Producto agotado" : "Agregar al carrito"}
                   </button>
                 </div>
               </article>
@@ -530,6 +545,11 @@ function ProductModal({ product, add, close }) {
             <h2>{product.name}</h2>
             <Stars value={product.rating} />
             <p>{product.description}</p>
+            <div className="modal-product-pricing">
+              {Number(product.original_price) > Number(product.price) && <del>{money(product.original_price)}</del>}
+              <strong>{money(product.price)}</strong>
+              <span className={Number(product.stock) <= 0 ? "stock-out" : "stock-available"}>{Number(product.stock) <= 0 ? "Agotado" : `${product.stock} disponibles`}</span>
+            </div>
             <p>
               Vendido por <b>{product.store}</b>
             </p>
@@ -539,10 +559,10 @@ function ProductModal({ product, add, close }) {
               <div className="quantity-control">
                 <button onClick={() => setQ(Math.max(1, q - 1))}>−</button>
                 <input readOnly value={q} />
-                <button onClick={() => setQ(q + 1)}>+</button>
+                <button onClick={() => setQ(Math.min(Number(product.stock ?? q), q + 1))} disabled={Number(product.stock) <= q}>+</button>
               </div>
-              <button className="btn" onClick={() => add(product, q)}>
-                Agregar al carrito
+              <button className="btn" disabled={Number(product.stock) <= 0} onClick={() => add(product, q)}>
+                {Number(product.stock) <= 0 ? "Producto agotado" : "Agregar al carrito"}
               </button>
             </div>
             <section className="modal-review">
@@ -1141,10 +1161,11 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, close }) {
   ];
   const [tab, setTab] = useState("home");
   const [addingProduct, setAddingProduct] = useState(false);
-  const [productDraft, setProductDraft] = useState({ name: "", category: store?.category || "", price: "", description: "", story: "", image: "" });
+  const [productDraft, setProductDraft] = useState({ name: "", category: store?.category || configuredCategories()[0], price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
   const [productMessage, setProductMessage] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const products = store?.products || [];
+  const categoryOptions = [...new Set([...configuredCategories(), store?.category].filter(Boolean))];
   const registeredClients = JSON.parse(localStorage.getItem("choping-registered-users") || "[]")
     .filter((account) => account.role === "cliente" && account.store_name?.toLowerCase() === store?.name?.toLowerCase());
   const maskedEmail = (email = "") => {
@@ -1195,7 +1216,7 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, close }) {
     event.preventDefault();
     try {
       await createProduct(productDraft);
-      setProductDraft({ name: "", category: store?.category || "", price: "", description: "", story: "", image: "" });
+      setProductDraft({ name: "", category: store?.category || configuredCategories()[0], price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
       setAddingProduct(false);
       setProductMessage("Producto creado y publicado en tu catálogo.");
     } catch (error) {
@@ -1228,8 +1249,10 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, close }) {
               {addingProduct && (
                 <form className="store-product-form" onSubmit={saveProduct}>
                   <label>Nombre del producto<input value={productDraft.name} onChange={(event) => setProductDraft({ ...productDraft, name: event.target.value })} required /></label>
-                  <label>Categoría<input value={productDraft.category} onChange={(event) => setProductDraft({ ...productDraft, category: event.target.value })} required /></label>
+                  <label>Categoría<select value={productDraft.category} onChange={(event) => setProductDraft({ ...productDraft, category: event.target.value })} required>{categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
                   <label>Precio<input type="number" min="1" value={productDraft.price} onChange={(event) => setProductDraft({ ...productDraft, price: event.target.value })} required /></label>
+                  <label>Precio anterior (tachado)<input type="number" min="1" value={productDraft.original_price} onChange={(event) => setProductDraft({ ...productDraft, original_price: event.target.value })} placeholder="Opcional" /></label>
+                  <label>Stock disponible<input type="number" min="0" step="1" value={productDraft.stock} onChange={(event) => setProductDraft({ ...productDraft, stock: event.target.value })} required /></label>
                   <label>URL de la imagen<input type="url" value={/^(https?:)?\/\//i.test(productDraft.image) ? productDraft.image : ""} onChange={(event) => setProductDraft({ ...productDraft, image: event.target.value })} placeholder="https://ejemplo.com/producto.jpg" /></label>
                   <label className="store-product-image-drop store-product-wide" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); uploadProductImage(event.dataTransfer.files[0]); }}>
                     <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => uploadProductImage(event.target.files[0])} />
