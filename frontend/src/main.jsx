@@ -269,7 +269,7 @@ function App() {
               <div className="store-grid">{renderStoreCards(featuredStores, true)}</div>
             </section>
           )}
-          {visibleStores.length > 0 && (
+          {(
             <section className="directory-inline-banner" aria-label="Banners de tiendas">
               <BannerSlider
                 storeName={null}
