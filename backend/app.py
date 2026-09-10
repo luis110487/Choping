@@ -202,7 +202,24 @@ def supabase_service_key():
         or os.environ.get('SUPABASE_SECRET_KEY', '').strip()
     )
 
+def ensure_profile_schema():
+    try:
+        db.session.execute(text('''
+            create table if not exists public.profiles (
+                id uuid primary key references auth.users(id) on delete cascade,
+                role text not null default 'cliente'
+            )
+        '''))
+        db.session.execute(text("alter table public.profiles add column if not exists role text not null default 'cliente'"))
+        db.session.commit()
+        return True
+    except Exception:
+        db.session.rollback()
+        return False
+
 def sync_profile_role(user_id, role):
+    if not ensure_profile_schema():
+        return False
     try:
         db.session.execute(
             text('''
@@ -217,6 +234,17 @@ def sync_profile_role(user_id, role):
     except Exception:
         db.session.rollback()
         return False
+
+def auth_user_id_by_email(email):
+    try:
+        row = db.session.execute(
+            text('select id from auth.users where lower(email) = :email limit 1'),
+            {'email': email},
+        ).mappings().first()
+        return str(row['id']) if row else None
+    except Exception:
+        db.session.rollback()
+        return None
 
 def create_supabase_user(email, password, name, role, store_name=''):
     supabase_url, _ = supabase_auth_credentials()
@@ -376,7 +404,12 @@ def create_admin_user():
     account = LocalUser.query.filter_by(email=email).first()
     supabase_user, error = create_supabase_user(email, password, name, role, store_name)
     if error:
-        return jsonify({'error': error}), 409 if 'registered' in error.lower() else 502
+        if 'registered' not in error.lower():
+            return jsonify({'error': error}), 502
+        existing_user_id = auth_user_id_by_email(email)
+        if not existing_user_id:
+            return jsonify({'error': error}), 409
+        supabase_user = {'id': existing_user_id}
     if not sync_profile_role(supabase_user['id'], role):
         return jsonify({'error': 'Se creó la cuenta, pero no fue posible asignar su rol. Verifica la tabla profiles.'}), 500
     if account:
