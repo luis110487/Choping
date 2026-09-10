@@ -3,6 +3,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-only-change-me')
@@ -20,6 +21,15 @@ class Product(db.Model):
     image = db.Column(db.String(255))
     store = db.Column(db.String(120), nullable=False, default='Tienda Choping')
     rating = db.Column(db.Float, default=4.5)
+
+class LocalUser(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default='cliente')
+    phone = db.Column(db.String(40))
+    store_name = db.Column(db.String(120))
 
 DEMO_PRODUCTS = [
     {'name': 'Combo PC Gamer TUF', 'category': 'Tecnologia', 'price': 3850000, 'description': 'Computador gamer completo para jugar, estudiar y crear contenido.', 'image': 'products/pc-gamer.png', 'store': 'Tech Zone', 'rating': 4.8},
@@ -182,12 +192,22 @@ def login():
             'luis.gamarra@techdatasaync.com',
             'luis.gamarra@techdatasyn.com',
         })
-    role = profile_role(email)
-    if not role:
-        configured_admin = os.environ.get('ADMIN_EMAIL', '').strip().lower()
-        configured_store = os.environ.get('STORE_EMAIL', '').strip().lower()
-        role = 'superadmin' if email in superadmin_emails and data.get('password') == os.environ.get('SUPERADMIN_PASSWORD') else ('admin' if email == configured_admin and data.get('password') == os.environ.get('ADMIN_PASSWORD') else ('tienda' if email == configured_store else 'cliente'))
-    return jsonify({'user': {'email': email, 'name': email.split('@')[0], 'role': role}})
+    account = LocalUser.query.filter_by(email=email).first()
+    if account:
+        if not check_password_hash(account.password_hash, data['password']):
+            return jsonify({'error': 'Correo o contraseña incorrectos'}), 401
+        return jsonify({'user': {'email': account.email, 'name': account.name, 'role': account.role, 'phone': account.phone, 'store_name': account.store_name}})
+    configured_admin = os.environ.get('ADMIN_EMAIL', '').strip().lower()
+    configured_store = os.environ.get('STORE_EMAIL', '').strip().lower()
+    configured_accounts = [
+        (superadmin_emails, os.environ.get('SUPERADMIN_PASSWORD'), 'superadmin'),
+        ({configured_admin}, os.environ.get('ADMIN_PASSWORD'), 'admin'),
+        ({configured_store}, os.environ.get('STORE_PASSWORD'), 'tienda'),
+    ]
+    for emails, expected_password, role in configured_accounts:
+        if email in emails and expected_password and data['password'] == expected_password:
+            return jsonify({'user': {'email': email, 'name': email.split('@')[0], 'role': role}})
+    return jsonify({'error': 'Correo o contraseña incorrectos'}), 401
 
 @app.post('/api/auth/register')
 def register():
@@ -204,7 +224,19 @@ def register():
         return jsonify({'error': 'El telefono es obligatorio para clientes'}), 400
     if role == 'tienda' and not all(data.get(field, '').strip() for field in ('store_name', 'category', 'city', 'description')):
         return jsonify({'error': 'Las tiendas deben indicar nombre, categoria, ciudad y descripcion'}), 400
-    return jsonify({'user': {'name': name, 'email': email, 'role': role}, 'message': 'Usuario creado correctamente'}), 201
+    if LocalUser.query.filter_by(email=email).first():
+        return jsonify({'error': 'Ya existe un usuario con ese correo'}), 409
+    account = LocalUser(
+        name=name,
+        email=email,
+        password_hash=generate_password_hash(password),
+        role=role,
+        phone=data.get('phone', '').strip(),
+        store_name=data.get('store_name', '').strip(),
+    )
+    db.session.add(account)
+    db.session.commit()
+    return jsonify({'user': {'name': name, 'email': email, 'role': role, 'phone': account.phone, 'store_name': account.store_name}, 'message': 'Usuario creado correctamente'}), 201
 
 with app.app_context():
     db.create_all()
