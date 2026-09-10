@@ -185,6 +185,28 @@ class AdminUserProvisioningTests(unittest.TestCase):
         self.assertTrue(mock_urlopen.called)
         self.assertIsNotNone(LocalUser.query.filter_by(email='cliente@gmail.com').first())
 
+    @patch('app.sync_profile_role', return_value=True)
+    @patch('app.ensure_store_workspace', return_value=(True, None), create=True)
+    @patch('app.urlopen')
+    def test_store_registration_creates_its_store_workspace(self, mock_urlopen, mock_workspace, _mock_profile_sync):
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"id":"new-store-user-id","email":"tienda@gmail.com"}'
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        response = self.client.post('/api/auth/register', json={
+            'name': 'Responsable TDS',
+            'email': 'tienda@gmail.com',
+            'password': 'Clave123',
+            'role': 'tienda',
+            'store_name': 'TDS',
+            'category': 'Tecnologia',
+            'city': 'Barranquilla',
+            'description': 'Software',
+        })
+
+        self.assertEqual(response.status_code, 201)
+        mock_workspace.assert_called_once_with('TDS', 'Responsable TDS', 'Tecnologia', 'Barranquilla', 'Software')
+
 
 if __name__ == '__main__':
     unittest.main()

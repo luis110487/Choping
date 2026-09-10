@@ -139,6 +139,40 @@ def database_catalog(include_pending=False):
         db.session.rollback()
         return None
 
+def ensure_store_workspace(name, owner_name, category, city, description):
+    """Create the private workspace used by a store administrator.
+
+    New stores remain pending, so only the owner and platform administrators
+    can work on them before approval.
+    """
+    if not os.environ.get('DATABASE_URL'):
+        return True, None
+    try:
+        existing = db.session.execute(
+            text('select id from stores where lower(name) = lower(:name) limit 1'),
+            {'name': name},
+        ).mappings().first()
+        if existing:
+            return True, None
+        db.session.execute(
+            text('''
+                insert into stores (name, owner_name, category, city, description, approved)
+                values (:name, :owner_name, :category, :city, :description, false)
+            '''),
+            {
+                'name': name,
+                'owner_name': owner_name,
+                'category': category,
+                'city': city,
+                'description': description,
+            },
+        )
+        db.session.commit()
+        return True, None
+    except Exception:
+        db.session.rollback()
+        return False, 'No fue posible preparar el espacio de trabajo de la tienda.'
+
 @app.get('/api/stores')
 def stores():
     catalog = database_catalog(request.args.get('include_pending') == 'true')
@@ -366,9 +400,25 @@ def login():
         })
     account = LocalUser.query.filter_by(email=email).first()
     if account and check_password_hash(account.password_hash, data['password']):
+        if account.role == 'tienda' and account.store_name:
+            ensure_store_workspace(
+                account.store_name,
+                account.name,
+                'Sin categoria',
+                'Colombia',
+                'Tienda pendiente de configuración.',
+            )
         return login_response({'email': account.email, 'name': account.name, 'role': account.role, 'phone': account.phone, 'store_name': account.store_name})
     supabase_user = supabase_password_login(email, data['password'])
     if supabase_user:
+        if supabase_user['role'] == 'tienda' and supabase_user['store_name']:
+            ensure_store_workspace(
+                supabase_user['store_name'],
+                supabase_user['name'],
+                'Sin categoria',
+                'Colombia',
+                'Tienda pendiente de configuración.',
+            )
         return login_response(supabase_user)
     configured_admin = os.environ.get('ADMIN_EMAIL', '').strip().lower()
     configured_store = os.environ.get('STORE_EMAIL', '').strip().lower()
@@ -484,6 +534,16 @@ def register():
         return jsonify({'error': 'El telefono es obligatorio para clientes'}), 400
     if role == 'tienda' and not all(data.get(field, '').strip() for field in ('store_name', 'category', 'city', 'description')):
         return jsonify({'error': 'Las tiendas deben indicar nombre, categoria, ciudad y descripcion'}), 400
+    if role == 'tienda':
+        workspace_ready, workspace_error = ensure_store_workspace(
+            data['store_name'].strip(),
+            name,
+            data['category'].strip(),
+            data['city'].strip(),
+            data['description'].strip(),
+        )
+        if not workspace_ready:
+            return jsonify({'error': workspace_error}), 500
     account = LocalUser.query.filter_by(email=email).first()
     if account and not check_password_hash(account.password_hash, password):
         return jsonify({'error': 'Ya existe un usuario con ese correo. Inicia sesión o usa otra contraseña.'}), 409

@@ -62,10 +62,11 @@ function App() {
       ),
     );
   useEffect(() => {
-    fetch(`${API}/api/stores`)
+    const includePending = user?.role === "tienda" ? "?include_pending=true" : "";
+    fetch(`${API}/api/stores${includePending}`)
       .then((r) => r.json())
       .then((data) => setStores(Array.isArray(data) ? data : []));
-  }, []);
+  }, [user?.role]);
   useEffect(() => {
     if (user?.role !== "tienda" || store || !user.store_name) return;
     const assignedStore = stores.find(
