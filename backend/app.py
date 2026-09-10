@@ -139,6 +139,7 @@ def login():
     superadmin_emails = {
         'luis.gamarra@techdatasync.com',
         'luis.gamarra@techdatasaync.com',
+        'luis.gamarra@techdatasyn.com',
     }
     if configured_superadmin:
         superadmin_emails.add(configured_superadmin)
@@ -149,6 +150,7 @@ def login():
         superadmin_emails.update({
             'luis.gamarra@techdatasync.com',
             'luis.gamarra@techdatasaync.com',
+            'luis.gamarra@techdatasyn.com',
         })
     role = 'superadmin' if email in superadmin_emails and data.get('password') == os.environ.get('SUPERADMIN_PASSWORD') else ('admin' if email == os.environ.get('ADMIN_EMAIL') and data.get('password') == os.environ.get('ADMIN_PASSWORD') else ('tienda' if email == os.environ.get('STORE_EMAIL') else 'cliente'))
     return jsonify({'user': {'email': email, 'name': email.split('@')[0], 'role': role}})

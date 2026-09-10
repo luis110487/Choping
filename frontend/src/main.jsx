@@ -357,7 +357,8 @@ function App() {
         />
       )}
       {storeAdminOpen && (
-        <StoreCustomizer
+        <StoreAdminPanel
+          store={store}
           theme={storeThemes[store.name] || "ocean"}
           setTheme={(value) => {
             const next = { ...storeThemes, [store.name]: value };
@@ -772,48 +773,34 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
     </div>
   );
 }
-function StoreCustomizer({ theme, setTheme, close }) {
+function StoreAdminPanel({ store, theme, setTheme, close }) {
   const themes = [
     { id: "ocean", name: "Ocean", detail: "Azul, limpia y tecnológica" },
     { id: "sunset", name: "Sunset", detail: "Cálida y comercial" },
     { id: "forest", name: "Forest", detail: "Natural y confiable" },
     { id: "mono", name: "Minimal", detail: "Elegante y sobria" },
   ];
+  const [tab, setTab] = useState("home");
+  const products = store?.products || [];
   return (
-    <div className="overlay">
-      <section className="cart-modal store-customizer">
-        <button className="modal-close" onClick={close}>
-          ×
-        </button>
-        <div className="cart-modal-content">
-          <small>PANEL DE MI TIENDA</small>
-          <h2>Diseña tu perfil</h2>
-          <p>Elige una plantilla para organizar tu tienda.</p>
-          <div className="theme-options">
-            {themes.map((item) => (
-              <button
-                key={item.id}
-                className={`theme-option theme-${item.id} ${theme === item.id ? "selected" : ""}`}
-                onClick={() => setTheme(item.id)}
-              >
-                <span className="theme-preview" />
-                <strong>{item.name}</strong>
-                <small>{item.detail}</small>
-              </button>
-            ))}
-          </div>
-          <h3>Contenido de la tienda</h3>
-          <label>
-            Logo de la tienda
-            <input type="file" accept="image/*" />
-          </label>
-          <label>
-            Banners superiores (hasta 3)
-            <input type="file" accept="image/*" multiple />
-          </label>
-          <p className="form-hint">
-            Los cambios visuales se aplican inmediatamente a tu perfil.
-          </p>
+    <div className="overlay store-admin-overlay">
+      <section className="store-admin-panel">
+        <aside className="store-admin-sidebar">
+          <div className="store-admin-brand"><strong>CHOPING</strong><span>Mi tienda</span></div>
+          <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")}>⌂ <span>Inicio</span></button>
+          <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>◇ <span>Productos</span></button>
+          <button className={tab === "store" ? "active" : ""} onClick={() => setTab("store")}>▣ <span>Mi tienda</span></button>
+          <button onClick={() => setTab("home")}>◌ <span>Consultas</span></button>
+          <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>⚙ <span>Configuración</span></button>
+          <div className="store-admin-sidebar-footer"><button onClick={close}>↩ <span>Cerrar panel</span></button></div>
+        </aside>
+        <div className="store-admin-main">
+          <button className="modal-close" onClick={close}>×</button>
+          <header className="store-admin-header"><div><small>MI TIENDA</small><h1>¡Hola!</h1><p>Gestiona {store?.name || "tu tienda"} desde un solo lugar.</p></div><div className="store-admin-account"><span>{store?.name?.slice(0, 1) || "T"}</span><strong>{store?.name || "Mi tienda"}</strong></div></header>
+          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>0</strong><span>Visitas a tu tienda</span></div><div><strong>0</strong><span>Consultas recibidas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => setTab("products")}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={`${API}/static/img/${product.image}`} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`} onClick={() => setTab("products")}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark">{store?.name?.slice(0, 1) || "T"}</div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
+          {tab === "products" && <div className="store-admin-content"><h2>Productos de {store?.name}</h2><p>Administra el catálogo y revisa los productos publicados.</p><div className="store-admin-list">{products.map((product) => <div className="store-product-row" key={product.id}><img src={`${API}/static/img/${product.image}`} alt="" /><div><strong>{product.name}</strong><small>{product.category} · {money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`}>✎</button><button aria-label={`Eliminar ${product.name}`}>⌫</button></div>)}</div></div>}
+          {tab === "store" && <div className="store-admin-content"><h2>Información de mi tienda</h2><p>Consulta y actualiza la información visible para tus clientes.</p><div className="store-edit-grid"><label>Nombre de la tienda<input defaultValue={store?.name || ""} /></label><label>Categoría<input defaultValue={store?.category || ""} /></label><label>Ciudad<input defaultValue={store?.city || ""} /></label><label>Descripción<textarea defaultValue={store?.description || ""} /></label></div><button className="btn">Guardar información</button></div>}
+          {tab === "settings" && <div className="store-admin-content"><small>PERSONALIZACIÓN</small><h2>Diseña tu perfil</h2><p>Elige una plantilla para organizar tu tienda.</p><div className="theme-options">{themes.map((item) => <button key={item.id} className={`theme-option theme-${item.id} ${theme === item.id ? "selected" : ""}`} onClick={() => setTheme(item.id)}><span className="theme-preview" /><strong>{item.name}</strong><small>{item.detail}</small></button>)}</div><h3>Contenido de la tienda</h3><label>Logo de la tienda<input type="file" accept="image/*" /></label><label>Banners superiores (hasta 3)<input type="file" accept="image/*" multiple /></label><p className="form-hint">Los cambios visuales se aplican inmediatamente a tu perfil.</p></div>}
         </div>
       </section>
     </div>
