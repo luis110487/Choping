@@ -148,6 +148,7 @@ function App() {
   const logout = () => {
     setUser(null);
     localStorage.removeItem("choping-user");
+    localStorage.removeItem("choping-auth-token");
     localStorage.removeItem("choping-profile-open");
     setProfileOpen(false);
     setAdminOpen(false);
@@ -384,12 +385,13 @@ function App() {
         <LoginModal
           close={() => setLoginOpen(false)}
           currentStore={store?.name || ""}
-          onLogin={(nextUser) => {
+          onLogin={(nextUser, accessToken) => {
             const registeredAccount = JSON.parse(localStorage.getItem("choping-registered-users") || "[]")
               .find((account) => account.email === nextUser.email);
             const normalizedUser = normalizeAccount({ ...nextUser, ...registeredAccount });
             setUser(normalizedUser);
             localStorage.setItem("choping-user", JSON.stringify(normalizedUser));
+            if (accessToken) localStorage.setItem("choping-auth-token", accessToken);
             setLoginOpen(false);
             if (normalizedUser.role === "tienda") {
               const assignedStore = stores.find(
@@ -420,6 +422,7 @@ function App() {
           stores={stores}
           banner={banner}
           directoryBanner={directoryBanner}
+          authToken={localStorage.getItem("choping-auth-token") || ""}
           setBanner={(value) => {
             setBanner(value);
             localStorage.setItem("choping-banner", String(value));
@@ -693,7 +696,7 @@ function BannerSlider({ storeName, banner, setBanner, storageKey = "choping-home
     </section>
   );
 }
-function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirectoryBanner, close }) {
+function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirectoryBanner, close, authToken }) {
   const defaultImages = [
     "/banner-home-1.png",
     "/banner-home-2.png",
@@ -813,7 +816,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
       setCategoryIcon("▦");
     }
   };
-  const saveUser = (event) => {
+  const saveUser = async (event) => {
     event.preventDefault();
     const name = newUserName.trim();
     const email = newUserEmail.trim().toLowerCase();
@@ -829,10 +832,25 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
       setUserMessage("Ya existe un usuario con ese correo.");
       return;
     }
+    if (!authToken) {
+      setUserMessage("Tu sesión de administrador expiró. Cierra sesión e ingresa nuevamente.");
+      return;
+    }
     const account = { name, email, role: newUserRole, store_name: newUserRole === "tienda" ? newUserStore : "" };
+    const response = await fetch(`${API}/api/admin/users${editingUser ? `/${encodeURIComponent(editingUser)}` : ""}`, {
+      method: editingUser ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ ...account, password: newUserPassword }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setUserMessage(result.error || "No fue posible guardar el usuario.");
+      return;
+    }
+    const savedAccount = result.user;
     const next = editingUser
-      ? managedUsers.map((user) => user.email === editingUser ? { ...user, ...account } : user)
-      : [...managedUsers, account];
+      ? managedUsers.map((user) => user.email === editingUser ? { ...user, ...savedAccount } : user)
+      : [...managedUsers, savedAccount];
     setManagedUsers(next);
     localStorage.setItem("choping-registered-users", JSON.stringify(next));
     setNewUserName("");
@@ -1322,7 +1340,7 @@ function LoginModal({ close, onLogin, currentStore = "" }) {
         nextUser,
       ]));
     }
-    if (response.ok && !register) onLogin(data.user);
+    if (response.ok && !register) onLogin(data.user, data.access_token);
     setMessage(
       response.ok
         ? data.message || `Bienvenido, ${data.user.name}`

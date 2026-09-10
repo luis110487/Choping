@@ -3,6 +3,7 @@ import json
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -151,8 +152,33 @@ def stores():
         store['products'].append(p)
     return jsonify(result)
 
+VALID_ROLES = {'cliente', 'tienda', 'admin', 'superadmin'}
+
 def profile_role(email):
     if not os.environ.get('DATABASE_URL'):
+        return None
+    try:
+        try:
+            row = db.session.execute(
+                text('select role from public.profiles where lower(email) = :email limit 1'),
+                {'email': email},
+            ).mappings().first()
+        except Exception:
+            db.session.rollback()
+            row = db.session.execute(
+                text('''
+                    select p.role
+                    from public.profiles p
+                    join auth.users u on u.id = p.id
+                    where lower(u.email) = :email
+                    limit 1
+                '''),
+                {'email': email},
+            ).mappings().first()
+        role = row['role'] if row else None
+        return role if role in VALID_ROLES else None
+    except Exception:
+        db.session.rollback()
         return None
 
 def supabase_auth_credentials():
@@ -169,6 +195,88 @@ def supabase_auth_credentials():
             project_ref = database_user.split('.', 1)[1]
             supabase_url = f'https://{project_ref}.supabase.co'
     return supabase_url, supabase_key
+
+def supabase_service_key():
+    return (
+        os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '').strip()
+        or os.environ.get('SUPABASE_SECRET_KEY', '').strip()
+    )
+
+def sync_profile_role(user_id, role):
+    try:
+        db.session.execute(
+            text('''
+                insert into public.profiles (id, role)
+                values (:user_id, :role)
+                on conflict (id) do update set role = excluded.role
+            '''),
+            {'user_id': user_id, 'role': role},
+        )
+        db.session.commit()
+        return True
+    except Exception:
+        db.session.rollback()
+        return False
+
+def create_supabase_user(email, password, name, role, store_name=''):
+    supabase_url, _ = supabase_auth_credentials()
+    service_key = supabase_service_key()
+    if not supabase_url or not service_key:
+        return None, 'Falta configurar la clave de servicio de Supabase en Render.'
+    payload = json.dumps({
+        'email': email,
+        'password': password,
+        'email_confirm': True,
+        'user_metadata': {
+            'name': name,
+            'store_name': store_name,
+            'role': role,
+        },
+    }).encode('utf-8')
+    admin_request = Request(
+        f'{supabase_url}/auth/v1/admin/users',
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'apikey': service_key,
+            'Authorization': f'Bearer {service_key}',
+        },
+        method='POST',
+    )
+    try:
+        with urlopen(admin_request, timeout=12) as response:
+            return json.loads(response.read().decode('utf-8')), None
+    except HTTPError as error:
+        try:
+            detail = json.loads(error.read().decode('utf-8')).get('msg') or 'No fue posible crear el usuario.'
+        except (ValueError, UnicodeDecodeError):
+            detail = 'No fue posible crear el usuario.'
+        return None, detail
+    except (URLError, TimeoutError, ValueError):
+        return None, 'No fue posible conectar con Supabase.'
+
+def access_token_for(user):
+    return URLSafeTimedSerializer(app.config['SECRET_KEY'], salt='choping-auth').dumps({
+        'email': user['email'],
+        'role': user['role'],
+        'name': user.get('name', ''),
+    })
+
+def authenticated_actor():
+    authorization = request.headers.get('Authorization', '')
+    if not authorization.startswith('Bearer '):
+        return None
+    try:
+        actor = URLSafeTimedSerializer(app.config['SECRET_KEY'], salt='choping-auth').loads(
+            authorization.removeprefix('Bearer '),
+            max_age=60 * 60 * 8,
+        )
+    except (BadSignature, SignatureExpired):
+        return None
+    return actor if actor.get('role') in {'admin', 'superadmin'} else None
+
+def login_response(user):
+    return jsonify({'user': user, 'access_token': access_token_for(user)})
 
 def supabase_password_login(email, password):
     """Authenticate users already managed by Supabase Auth.
@@ -204,29 +312,6 @@ def supabase_password_login(email, password):
         'phone': metadata.get('phone', ''),
         'store_name': metadata.get('store_name', ''),
     }
-    try:
-        try:
-            row = db.session.execute(
-                text('select role from public.profiles where lower(email) = :email limit 1'),
-                {'email': email},
-            ).mappings().first()
-        except Exception:
-            db.session.rollback()
-            row = db.session.execute(
-                text('''
-                    select p.role
-                    from public.profiles p
-                    join auth.users u on u.id = p.id
-                    where lower(u.email) = :email
-                    limit 1
-                '''),
-                {'email': email},
-            ).mappings().first()
-        role = row['role'] if row else None
-        return role if role in ('cliente', 'tienda', 'admin', 'superadmin') else None
-    except Exception:
-        db.session.rollback()
-        return None
 
 @app.post('/api/auth/login')
 def login():
@@ -253,10 +338,10 @@ def login():
         })
     account = LocalUser.query.filter_by(email=email).first()
     if account and check_password_hash(account.password_hash, data['password']):
-        return jsonify({'user': {'email': account.email, 'name': account.name, 'role': account.role, 'phone': account.phone, 'store_name': account.store_name}})
+        return login_response({'email': account.email, 'name': account.name, 'role': account.role, 'phone': account.phone, 'store_name': account.store_name})
     supabase_user = supabase_password_login(email, data['password'])
     if supabase_user:
-        return jsonify({'user': supabase_user})
+        return login_response(supabase_user)
     configured_admin = os.environ.get('ADMIN_EMAIL', '').strip().lower()
     configured_store = os.environ.get('STORE_EMAIL', '').strip().lower()
     configured_accounts = [
@@ -266,8 +351,74 @@ def login():
     ]
     for emails, expected_password, role in configured_accounts:
         if email in emails and expected_password and data['password'] == expected_password:
-            return jsonify({'user': {'email': email, 'name': email.split('@')[0], 'role': role}})
+            return login_response({'email': email, 'name': email.split('@')[0], 'role': role})
     return jsonify({'error': 'Correo o contraseña incorrectos'}), 401
+
+@app.post('/api/admin/users')
+def create_admin_user():
+    actor = authenticated_actor()
+    if not actor:
+        return jsonify({'error': 'Tu sesión de administrador expiró. Inicia sesión nuevamente.'}), 401
+    data = request.get_json(silent=True) or {}
+    name = data.get('name', '').strip()
+    email = data.get('email', '').strip().lower()
+    password = data.get('password', '')
+    role = data.get('role', 'cliente')
+    store_name = data.get('store_name', '').strip()
+    if not name or not email or len(password) < 6:
+        return jsonify({'error': 'Nombre, correo y contraseña de al menos 6 caracteres son obligatorios.'}), 400
+    if role not in VALID_ROLES:
+        return jsonify({'error': 'Rol de usuario no válido.'}), 400
+    if actor['role'] != 'superadmin' and role in {'admin', 'superadmin'}:
+        return jsonify({'error': 'Solo un superadmin puede crear administradores.'}), 403
+    if role == 'tienda' and not store_name:
+        return jsonify({'error': 'Selecciona la tienda que administrará este usuario.'}), 400
+    if LocalUser.query.filter_by(email=email).first():
+        return jsonify({'error': 'Ya existe un usuario con ese correo.'}), 409
+    supabase_user, error = create_supabase_user(email, password, name, role, store_name)
+    if error:
+        return jsonify({'error': error}), 409 if 'registered' in error.lower() else 502
+    if not sync_profile_role(supabase_user['id'], role):
+        return jsonify({'error': 'Se creó la cuenta, pero no fue posible asignar su rol. Verifica la tabla profiles.'}), 500
+    account = LocalUser(
+        name=name,
+        email=email,
+        password_hash=generate_password_hash(password),
+        role=role,
+        store_name=store_name,
+    )
+    db.session.add(account)
+    db.session.commit()
+    return jsonify({'user': {'name': name, 'email': email, 'role': role, 'store_name': store_name}}), 201
+
+@app.put('/api/admin/users/<path:email>')
+def update_admin_user(email):
+    actor = authenticated_actor()
+    if not actor:
+        return jsonify({'error': 'Tu sesión de administrador expiró. Inicia sesión nuevamente.'}), 401
+    account = LocalUser.query.filter_by(email=email.strip().lower()).first()
+    if not account:
+        return jsonify({'error': 'No encontramos ese usuario.'}), 404
+    data = request.get_json(silent=True) or {}
+    name = data.get('name', '').strip()
+    role = data.get('role', account.role)
+    store_name = data.get('store_name', '').strip()
+    password = data.get('password', '')
+    if not name or role not in VALID_ROLES:
+        return jsonify({'error': 'Nombre y rol válidos son obligatorios.'}), 400
+    if actor['role'] != 'superadmin' and role in {'admin', 'superadmin'}:
+        return jsonify({'error': 'Solo un superadmin puede asignar ese rol.'}), 403
+    if role == 'tienda' and not store_name:
+        return jsonify({'error': 'Selecciona la tienda que administrará este usuario.'}), 400
+    if password and len(password) < 6:
+        return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres.'}), 400
+    account.name = name
+    account.role = role
+    account.store_name = store_name if role == 'tienda' else ''
+    if password:
+        account.password_hash = generate_password_hash(password)
+    db.session.commit()
+    return jsonify({'user': {'name': account.name, 'email': account.email, 'role': account.role, 'store_name': account.store_name}})
 
 @app.post('/api/auth/register')
 def register():
