@@ -688,7 +688,15 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     [categoryName, setCategoryName] = useState(""),
     [categoryIcon, setCategoryIcon] = useState("▦"),
     [editingCategory, setEditingCategory] = useState(null),
-    [categoryMessage, setCategoryMessage] = useState("");
+    [categoryMessage, setCategoryMessage] = useState(""),
+    [managedUsers, setManagedUsers] = useState(() =>
+      JSON.parse(localStorage.getItem("choping-registered-users") || "[]"),
+    ),
+    [newUserName, setNewUserName] = useState(""),
+    [newUserEmail, setNewUserEmail] = useState(""),
+    [newUserRole, setNewUserRole] = useState("cliente"),
+    [newUserStore, setNewUserStore] = useState(""),
+    [userMessage, setUserMessage] = useState("");
   useEffect(() => {
     fetch(`${API}/api/stores?include_pending=true`)
       .then((response) => response.json())
@@ -764,6 +772,33 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
       setCategoryIcon("▦");
     }
   };
+  const saveUser = (event) => {
+    event.preventDefault();
+    const name = newUserName.trim();
+    const email = newUserEmail.trim().toLowerCase();
+    if (!name || !email) return;
+    if (newUserRole === "tienda" && !newUserStore) {
+      setUserMessage("Selecciona la tienda que tendrá asignada este usuario.");
+      return;
+    }
+    if (managedUsers.some((user) => user.email === email)) {
+      setUserMessage("Ya existe un usuario con ese correo.");
+      return;
+    }
+    const next = [...managedUsers, {
+      name,
+      email,
+      role: newUserRole,
+      store_name: newUserRole === "tienda" ? newUserStore : "",
+    }];
+    setManagedUsers(next);
+    localStorage.setItem("choping-registered-users", JSON.stringify(next));
+    setNewUserName("");
+    setNewUserEmail("");
+    setNewUserRole("cliente");
+    setNewUserStore("");
+    setUserMessage("Usuario creado correctamente.");
+  };
   return (
     <div className="overlay admin-overlay">
       <section className="admin-dashboard-panel">
@@ -772,6 +807,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
           <button className="admin-back-button" onClick={close}>← <span>Ir a tiendas</span></button>
           <button className={tab === "summary" ? "active" : ""} onClick={() => setTab("summary")}>⌂ <span>Dashboard</span></button>
           <small>GESTIÓN GENERAL</small>
+          <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}>♙ <span>Usuarios</span></button>
           <button className={tab === "stores" ? "active" : ""} onClick={() => setTab("stores")}>▣ <span>Tiendas</span></button>
           <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>◇ <span>Productos</span></button>
           <button className={tab === "categories" ? "active" : ""} onClick={() => setTab("categories")}>▦ <span>Categorías</span></button>
@@ -817,6 +853,12 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
               Aprobación de tiendas
             </button>
             <button
+              className={tab === "users" ? "selected" : ""}
+              onClick={() => setTab("users")}
+            >
+              Usuarios
+            </button>
+            <button
               className={tab === "requests" ? "selected" : ""}
               onClick={() => setTab("requests")}
             >
@@ -849,6 +891,22 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
                 <p><b>Admin:</b> banners, tiendas y productos.</p>
                 <p><b>Tienda:</b> catálogo, categorías y personalización de su tienda.</p>
                 <p><b>Cliente:</b> compras, pedidos y reseñas verificadas.</p>
+              </div>
+            </>
+          ) : tab === "users" ? (
+            <>
+              <h2>Usuarios y roles</h2>
+              <p>Crea cuentas y define qué puede administrar cada usuario.</p>
+              <form className="admin-user-form" onSubmit={saveUser}>
+                <label>Nombre completo<input value={newUserName} onChange={(event) => setNewUserName(event.target.value)} required /></label>
+                <label>Correo electrónico<input type="email" value={newUserEmail} onChange={(event) => setNewUserEmail(event.target.value)} required /></label>
+                <label>Rol<select value={newUserRole} onChange={(event) => { setNewUserRole(event.target.value); setNewUserStore(""); }}><option value="cliente">Cliente</option><option value="tienda">Tienda</option><option value="admin">Administrador</option><option value="superadmin">Superadmin</option></select></label>
+                {newUserRole === "tienda" && <label>Tienda asignada<select value={newUserStore} onChange={(event) => setNewUserStore(event.target.value)} required><option value="">Selecciona una tienda</option>{stores.map((store) => <option key={store.name} value={store.name}>{store.name} · {store.city || "Colombia"}</option>)}</select></label>}
+                <button className="btn" type="submit">Crear usuario</button>
+              </form>
+              {userMessage && <p className="admin-category-message">{userMessage}</p>}
+              <div className="admin-user-list">
+                {managedUsers.length ? managedUsers.map((account) => <div className="admin-user-row" key={account.email}><span className="admin-user-avatar">{(account.name || account.email).slice(0, 1).toUpperCase()}</span><div><strong>{account.name || "Usuario"}</strong><small>{account.email}</small></div><span className={`admin-role-badge role-${account.role}`}>{account.role}</span>{account.role === "tienda" && <small>{account.store_name || "Sin tienda asignada"}</small>}</div>) : <div className="store-admin-empty"><strong>Aún no hay usuarios creados</strong><span>Los usuarios nuevos aparecerán aquí.</span></div>}
               </div>
             </>
           ) : tab === "categories" ? (
