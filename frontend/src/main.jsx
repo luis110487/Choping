@@ -41,6 +41,9 @@ function App() {
     [banner, setBanner] = useState(() =>
       Number(localStorage.getItem("choping-banner") || 0),
     ),
+    [directoryBanner, setDirectoryBanner] = useState(() =>
+      Number(localStorage.getItem("choping-directory-banner") || 0),
+    ),
     [adminOpen, setAdminOpen] = useState(false),
     [user, setUser] = useState(() => normalizeAccount(JSON.parse(localStorage.getItem("choping-user") || "null"))),
     [profileOpen, setProfileOpen] = useState(() => localStorage.getItem("choping-profile-open") === "true"),
@@ -270,10 +273,11 @@ function App() {
             <section className="directory-inline-banner" aria-label="Banners de tiendas">
               <BannerSlider
                 storeName={null}
-                banner={banner}
+                banner={directoryBanner}
+                storageKey="choping-directory-banners"
                 setBanner={(value) => {
-                  setBanner(value);
-                  localStorage.setItem("choping-banner", String(value));
+                  setDirectoryBanner(value);
+                  localStorage.setItem("choping-directory-banner", String(value));
                 }}
               />
             </section>
@@ -375,9 +379,14 @@ function App() {
         <AdminBannerPanel
           stores={stores}
           banner={banner}
+          directoryBanner={directoryBanner}
           setBanner={(value) => {
             setBanner(value);
             localStorage.setItem("choping-banner", String(value));
+          }}
+          setDirectoryBanner={(value) => {
+            setDirectoryBanner(value);
+            localStorage.setItem("choping-directory-banner", String(value));
           }}
           close={() => setAdminOpen(false)}
         />
@@ -581,7 +590,7 @@ function CartModal({ cart, setCart, setPurchased, total, close }) {
     </div>
   );
 }
-function BannerSlider({ storeName, banner, setBanner }) {
+function BannerSlider({ storeName, banner, setBanner, storageKey = "choping-home-banners" }) {
   const defaultImages =
     storeName === "EcoRuedas"
       ? [
@@ -604,7 +613,7 @@ function BannerSlider({ storeName, banner, setBanner }) {
           : ["/banner-home-1.png", "/banner-home-2.png", "/banner-home-3.png"];
   const images = storeName
     ? defaultImages
-    : JSON.parse(localStorage.getItem("choping-home-banners") || "null") || defaultImages;
+    : JSON.parse(localStorage.getItem(storageKey) || "null") || defaultImages;
   useEffect(() => {
     const timer = setInterval(
       () => setBanner((banner + 1) % images.length),
@@ -644,7 +653,7 @@ function BannerSlider({ storeName, banner, setBanner }) {
     </section>
   );
 }
-function AdminBannerPanel({ stores, banner, setBanner, close }) {
+function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirectoryBanner, close }) {
   const defaultImages = [
     "/banner-home-1.png",
     "/banner-home-2.png",
@@ -656,8 +665,16 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
     { id: "movilidad", name: "Movilidad", icon: "🚲" },
     { id: "moda", name: "Moda", icon: "✦" },
   ];
+  const directoryDefaultImages = [
+    "/banner-home-2.png",
+    "/banner-home-3.png",
+    "/banner-home-1.png",
+  ];
   const [images, setImages] = useState(() =>
     JSON.parse(localStorage.getItem("choping-home-banners") || "null") || defaultImages,
+  );
+  const [directoryImages, setDirectoryImages] = useState(() =>
+    JSON.parse(localStorage.getItem("choping-directory-banners") || "null") || directoryDefaultImages,
   );
   const [tab, setTab] = useState("summary"),
     [managedStores, setManagedStores] = useState(stores),
@@ -684,14 +701,20 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
     setApproved(next);
     localStorage.setItem("choping-approved-stores", JSON.stringify(next));
   };
-  const changeBannerImage = (index, file) => {
+  const changeBannerImage = (index, file, directory = false) => {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const next = [...images];
+      const current = directory ? directoryImages : images;
+      const next = [...current];
       next[index] = reader.result;
-      setImages(next);
-      localStorage.setItem("choping-home-banners", JSON.stringify(next));
+      if (directory) {
+        setDirectoryImages(next);
+        localStorage.setItem("choping-directory-banners", JSON.stringify(next));
+      } else {
+        setImages(next);
+        localStorage.setItem("choping-home-banners", JSON.stringify(next));
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -748,7 +771,7 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
           <button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>⚑ <span>Solicitudes</span></button>
           <small>CONFIGURACIÓN</small>
           <button onClick={() => setTab("summary")}>⚙ <span>Roles y permisos</span></button>
-          <button onClick={() => setTab("banners")}>▤ <span>Publicidad / Banners</span></button>
+          <button className={tab === "banners" || tab === "directory-banners" ? "active" : ""} onClick={() => setTab("banners")}>▤ <span>Publicidad / Banners</span></button>
           <div className="admin-sidebar-footer">Sesión de superadministrador</div>
         </aside>
         <div className="admin-main">
@@ -772,7 +795,13 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
               className={tab === "banners" ? "selected" : ""}
               onClick={() => setTab("banners")}
             >
-              Banners
+              Banners superiores
+            </button>
+            <button
+              className={tab === "directory-banners" ? "selected" : ""}
+              onClick={() => setTab("directory-banners")}
+            >
+              Banners del directorio
             </button>
             <button
               className={tab === "stores" ? "selected" : ""}
@@ -854,19 +883,20 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
                 ))}
               </div>
             </>
-          ) : tab === "banners" ? (
+          ) : tab === "banners" || tab === "directory-banners" ? (
             <>
-              <h2>Banner principal</h2>
+              <h2>{tab === "directory-banners" ? "Banners entre tiendas" : "Banners superiores"}</h2>
               <p>
-                Selecciona el banner que deseas mostrar primero en la vista de
-                tiendas.
+                {tab === "directory-banners"
+                  ? "Configura los tres banners independientes que aparecen entre las tiendas destacadas y el directorio."
+                  : "Configura los tres banners que aparecen en la parte superior."}
               </p>
               <div className="admin-banner-options">
-                {images.map((image, i) => (
-                  <div className={`admin-banner-card ${banner === i ? "selected" : ""}`} key={`banner-${i}`}>
+                {(tab === "directory-banners" ? directoryImages : images).map((image, i) => (
+                  <div className={`admin-banner-card ${(tab === "directory-banners" ? directoryBanner : banner) === i ? "selected" : ""}`} key={`${tab}-banner-${i}`}>
                     <img src={image} alt={`Banner ${i + 1}`} />
-                    <button onClick={() => setBanner(i)}><strong>Banner {i + 1}</strong><span>{banner === i ? "Activo" : "Seleccionar"}</span></button>
-                    <label className="admin-banner-upload">Cambiar imagen<input type="file" accept="image/*" onChange={(e) => changeBannerImage(i, e.target.files?.[0])} /></label>
+                    <button onClick={() => (tab === "directory-banners" ? setDirectoryBanner(i) : setBanner(i))}><strong>Banner {i + 1}</strong><span>{(tab === "directory-banners" ? directoryBanner : banner) === i ? "Activo" : "Seleccionar"}</span></button>
+                    <label className="admin-banner-upload">Cambiar imagen<input type="file" accept="image/*" onChange={(e) => changeBannerImage(i, e.target.files?.[0], tab === "directory-banners")} /></label>
                   </div>
                 ))}
               </div>
