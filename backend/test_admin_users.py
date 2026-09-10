@@ -1,5 +1,7 @@
 import os
 import unittest
+from io import BytesIO
+from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 from werkzeug.security import generate_password_hash
 
@@ -247,6 +249,35 @@ class AdminUserProvisioningTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.get_json()['product']['store'], 'Casa Viva')
         mock_create_product.assert_called_once()
+
+    def test_store_user_can_upload_a_product_image(self):
+        db.session.add(LocalUser(
+            name='Casa Viva',
+            email='casaviva@gmail.com',
+            password_hash=generate_password_hash('Clave123'),
+            role='tienda',
+            store_name='Casa Viva',
+        ))
+        db.session.commit()
+        login = self.client.post('/api/auth/login', json={
+            'email': 'casaviva@gmail.com',
+            'password': 'Clave123',
+        })
+        with TemporaryDirectory() as upload_folder:
+            previous_folder = app.config['PRODUCT_UPLOAD_FOLDER']
+            app.config['PRODUCT_UPLOAD_FOLDER'] = upload_folder
+            try:
+                response = self.client.post(
+                    '/api/store/product-images',
+                    headers={'Authorization': f"Bearer {login.get_json()['access_token']}"},
+                    data={'image': (BytesIO(b'image-content'), 'producto.png')},
+                    content_type='multipart/form-data',
+                )
+            finally:
+                app.config['PRODUCT_UPLOAD_FOLDER'] = previous_folder
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.get_json()['image'].startswith('uploads/'))
 
 
 if __name__ == '__main__':

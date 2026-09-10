@@ -1,5 +1,6 @@
 import os
 import json
+from uuid import uuid4
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -9,11 +10,14 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-only-change-me')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///encuentra.db').replace('postgres://', 'postgresql://', 1)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
+app.config['PRODUCT_UPLOAD_FOLDER'] = os.path.join(app.static_folder, 'img', 'uploads')
 db = SQLAlchemy(app)
 CORS(app, origins=os.environ.get('FRONTEND_ORIGIN', '*'))
 
@@ -217,6 +221,28 @@ def create_catalog_product(store_name, data):
     except Exception:
         db.session.rollback()
         return None, 'No fue posible guardar el producto.'
+
+@app.post('/api/store/product-images')
+def upload_store_product_image():
+    actor = authenticated_session()
+    if not actor or actor.get('role') != 'tienda':
+        return jsonify({'error': 'Solo la cuenta administradora de la tienda puede cargar imágenes.'}), 403
+    uploaded_image = request.files.get('image')
+    if not uploaded_image or not uploaded_image.filename:
+        return jsonify({'error': 'Selecciona una imagen para cargar.'}), 400
+    extension = uploaded_image.filename.rsplit('.', 1)[-1].lower() if '.' in uploaded_image.filename else ''
+    if extension not in {'png', 'jpg', 'jpeg', 'webp', 'gif'} or not (uploaded_image.mimetype or '').startswith('image/'):
+        return jsonify({'error': 'Usa una imagen PNG, JPG, WEBP o GIF.'}), 400
+    filename = secure_filename(uploaded_image.filename)
+    if not filename:
+        return jsonify({'error': 'El nombre del archivo no es válido.'}), 400
+    relative_path = f'uploads/{uuid4().hex}.{extension}'
+    try:
+        os.makedirs(app.config['PRODUCT_UPLOAD_FOLDER'], exist_ok=True)
+        uploaded_image.save(os.path.join(app.config['PRODUCT_UPLOAD_FOLDER'], relative_path.split('/', 1)[1]))
+    except OSError:
+        return jsonify({'error': 'No fue posible cargar la imagen. Intenta nuevamente.'}), 500
+    return jsonify({'image': relative_path}), 201
 
 @app.get('/api/stores')
 def stores():
