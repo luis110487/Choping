@@ -570,7 +570,7 @@ function CartModal({ cart, setCart, setPurchased, total, close }) {
   );
 }
 function BannerSlider({ storeName, banner, setBanner }) {
-  const images =
+  const defaultImages =
     storeName === "EcoRuedas"
       ? [
           "/ecorruedas-banner.png",
@@ -590,6 +590,9 @@ function BannerSlider({ storeName, banner, setBanner }) {
               "/techzone-banner.png",
             ]
           : ["/banner-home-1.png", "/banner-home-2.png", "/banner-home-3.png"];
+  const images = storeName
+    ? defaultImages
+    : JSON.parse(localStorage.getItem("choping-home-banners") || "null") || defaultImages;
   useEffect(() => {
     const timer = setInterval(
       () => setBanner((banner + 1) % images.length),
@@ -630,11 +633,14 @@ function BannerSlider({ storeName, banner, setBanner }) {
   );
 }
 function AdminBannerPanel({ stores, banner, setBanner, close }) {
-  const images = [
+  const defaultImages = [
     "/banner-home-1.png",
     "/banner-home-2.png",
     "/banner-home-3.png",
   ];
+  const [images, setImages] = useState(() =>
+    JSON.parse(localStorage.getItem("choping-home-banners") || "null") || defaultImages,
+  );
   const [tab, setTab] = useState("summary"),
     [approved, setApproved] = useState(() =>
       JSON.parse(localStorage.getItem("choping-approved-stores") || "[]"),
@@ -645,6 +651,17 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
       : approved.filter((item) => item !== name);
     setApproved(next);
     localStorage.setItem("choping-approved-stores", JSON.stringify(next));
+  };
+  const changeBannerImage = (index, file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const next = [...images];
+      next[index] = reader.result;
+      setImages(next);
+      localStorage.setItem("choping-home-banners", JSON.stringify(next));
+    };
+    reader.readAsDataURL(file);
   };
   return (
     <div className="overlay admin-overlay">
@@ -724,14 +741,11 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
               </p>
               <div className="admin-banner-options">
                 {images.map((image, i) => (
-                  <button
-                    className={banner === i ? "selected" : ""}
-                    key={image}
-                    onClick={() => setBanner(i)}
-                  >
+                  <div className={`admin-banner-card ${banner === i ? "selected" : ""}`} key={`banner-${i}`}>
                     <img src={image} alt={`Banner ${i + 1}`} />
-                    <strong>Banner {i + 1}</strong>
-                  </button>
+                    <button onClick={() => setBanner(i)}><strong>Banner {i + 1}</strong><span>{banner === i ? "Activo" : "Seleccionar"}</span></button>
+                    <label className="admin-banner-upload">Cambiar imagen<input type="file" accept="image/*" onChange={(e) => changeBannerImage(i, e.target.files?.[0])} /></label>
+                  </div>
                 ))}
               </div>
             </>
