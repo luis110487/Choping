@@ -1439,19 +1439,21 @@ function LoginModal({ close, onLogin, currentStore = "" }) {
             />
           </label>
           {message && <p>{message}</p>}
-          <button className="btn cart-checkout">
-            {register ? "Crear usuario" : "Ingresar"}
-          </button>
-          <button
-            type="button"
-            className="nav-link"
-            onClick={() => {
-              setRegister(!register);
-              setMessage("");
-            }}
-          >
-            {register ? "Ya tengo una cuenta" : "Crear usuario nuevo"}
-          </button>
+          <div className="login-form-actions">
+            <button className="btn cart-checkout">
+              {register ? "Crear usuario" : "Ingresar"}
+            </button>
+            <button
+              type="button"
+              className="nav-link"
+              onClick={() => {
+                setRegister(!register);
+                setMessage("");
+              }}
+            >
+              {register ? "Ya tengo una cuenta" : "Crear usuario nuevo"}
+            </button>
+          </div>
         </form>
       </section>
     </div>
