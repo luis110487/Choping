@@ -129,6 +129,20 @@ def stores():
         store['products'].append(p)
     return jsonify(result)
 
+def profile_role(email):
+    if not os.environ.get('DATABASE_URL'):
+        return None
+    try:
+        row = db.session.execute(
+            text('select role from public.profiles where lower(email) = :email limit 1'),
+            {'email': email},
+        ).mappings().first()
+        role = row['role'] if row else None
+        return role if role in ('cliente', 'tienda', 'admin', 'superadmin') else None
+    except Exception:
+        db.session.rollback()
+        return None
+
 @app.post('/api/auth/login')
 def login():
     data = request.get_json(silent=True) or {}
@@ -152,7 +166,11 @@ def login():
             'luis.gamarra@techdatasaync.com',
             'luis.gamarra@techdatasyn.com',
         })
-    role = 'superadmin' if email in superadmin_emails and data.get('password') == os.environ.get('SUPERADMIN_PASSWORD') else ('admin' if email == os.environ.get('ADMIN_EMAIL') and data.get('password') == os.environ.get('ADMIN_PASSWORD') else ('tienda' if email == os.environ.get('STORE_EMAIL') else 'cliente'))
+    role = profile_role(email)
+    if not role:
+        configured_admin = os.environ.get('ADMIN_EMAIL', '').strip().lower()
+        configured_store = os.environ.get('STORE_EMAIL', '').strip().lower()
+        role = 'superadmin' if email in superadmin_emails and data.get('password') == os.environ.get('SUPERADMIN_PASSWORD') else ('admin' if email == configured_admin and data.get('password') == os.environ.get('ADMIN_PASSWORD') else ('tienda' if email == configured_store else 'cliente'))
     return jsonify({'user': {'email': email, 'name': email.split('@')[0], 'role': role}})
 
 @app.post('/api/auth/register')
