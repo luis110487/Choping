@@ -1,4 +1,7 @@
 import os
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -145,6 +148,45 @@ def stores():
 def profile_role(email):
     if not os.environ.get('DATABASE_URL'):
         return None
+
+def supabase_password_login(email, password):
+    """Authenticate users already managed by Supabase Auth.
+
+    LocalUser remains the source for accounts created by this API, while this
+    fallback lets existing Supabase users (including store owners) use the
+    same login form during the migration.
+    """
+    supabase_url = os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
+    supabase_key = (
+        os.environ.get('SUPABASE_ANON_KEY', '').strip()
+        or os.environ.get('SUPABASE_KEY', '').strip()
+    )
+    if not supabase_url or not supabase_key:
+        return None
+    payload = json.dumps({'email': email, 'password': password}).encode('utf-8')
+    auth_request = Request(
+        f'{supabase_url}/auth/v1/token?grant_type=password',
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'apikey': supabase_key,
+        },
+        method='POST',
+    )
+    try:
+        with urlopen(auth_request, timeout=8) as response:
+            auth_user = json.loads(response.read().decode('utf-8')).get('user') or {}
+    except (HTTPError, URLError, TimeoutError, ValueError):
+        return None
+    role = profile_role(email) or 'cliente'
+    metadata = auth_user.get('user_metadata') or {}
+    return {
+        'email': auth_user.get('email', email),
+        'name': metadata.get('name') or metadata.get('full_name') or email.split('@')[0],
+        'role': role,
+        'phone': metadata.get('phone', ''),
+        'store_name': metadata.get('store_name', ''),
+    }
     try:
         try:
             row = db.session.execute(
@@ -197,6 +239,9 @@ def login():
         if not check_password_hash(account.password_hash, data['password']):
             return jsonify({'error': 'Correo o contraseña incorrectos'}), 401
         return jsonify({'user': {'email': account.email, 'name': account.name, 'role': account.role, 'phone': account.phone, 'store_name': account.store_name}})
+    supabase_user = supabase_password_login(email, data['password'])
+    if supabase_user:
+        return jsonify({'user': supabase_user})
     configured_admin = os.environ.get('ADMIN_EMAIL', '').strip().lower()
     configured_store = os.environ.get('STORE_EMAIL', '').strip().lower()
     configured_accounts = [
