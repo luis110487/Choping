@@ -642,9 +642,16 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
     JSON.parse(localStorage.getItem("choping-home-banners") || "null") || defaultImages,
   );
   const [tab, setTab] = useState("summary"),
+    [managedStores, setManagedStores] = useState(stores),
     [approved, setApproved] = useState(() =>
       JSON.parse(localStorage.getItem("choping-approved-stores") || "[]"),
     );
+  useEffect(() => {
+    fetch(`${API}/api/stores?include_pending=true`)
+      .then((response) => response.json())
+      .then((data) => Array.isArray(data) && setManagedStores(data))
+      .catch(() => setManagedStores(stores));
+  }, [stores]);
   const changeApproval = (name, value) => {
     const next = value
       ? [...new Set([...approved, name])]
@@ -674,7 +681,7 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
           <button className={tab === "stores" ? "active" : ""} onClick={() => setTab("stores")}>▣ <span>Tiendas</span></button>
           <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>◇ <span>Productos</span></button>
           <button onClick={() => setTab("summary")}>▦ <span>Categorías</span></button>
-          <button onClick={() => setTab("stores")}>⚑ <span>Solicitudes</span></button>
+          <button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>⚑ <span>Solicitudes</span></button>
           <small>CONFIGURACIÓN</small>
           <button onClick={() => setTab("summary")}>⚙ <span>Roles y permisos</span></button>
           <button onClick={() => setTab("banners")}>▤ <span>Publicidad / Banners</span></button>
@@ -708,6 +715,12 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
               onClick={() => setTab("stores")}
             >
               Aprobación de tiendas
+            </button>
+            <button
+              className={tab === "requests" ? "selected" : ""}
+              onClick={() => setTab("requests")}
+            >
+              Solicitudes
             </button>
             <button
               className={tab === "products" ? "selected" : ""}
@@ -749,12 +762,12 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
                 ))}
               </div>
             </>
-          ) : tab === "stores" ? (
+          ) : tab === "stores" || tab === "requests" ? (
             <>
-              <h2>Tiendas pendientes</h2>
-              <p>Aprueba las tiendas que pueden aparecer en el directorio.</p>
+              <h2>{tab === "requests" ? "Solicitudes de tiendas" : "Gestión de tiendas"}</h2>
+              <p>{tab === "requests" ? "Revisa y aprueba las tiendas que quieren aparecer en el directorio." : "Consulta el estado de todas las tiendas registradas."}</p>
               <div className="admin-store-list">
-                {stores.map((store) => (
+                {managedStores.filter((store) => tab !== "requests" || store.approved === false).map((store) => (
                   <div className="admin-store-row" key={store.name}>
                     <div>
                       <strong>{store.name}</strong>
@@ -764,16 +777,16 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
                     </div>
                     <button
                       className={
-                        approved.includes(store.name) ? "approved" : ""
+                        store.approved !== false && (approved.length === 0 || approved.includes(store.name)) ? "approved" : ""
                       }
                       onClick={() =>
                         changeApproval(
                           store.name,
-                          !approved.includes(store.name),
+                          !(store.approved !== false && (approved.length === 0 || approved.includes(store.name))),
                         )
                       }
                     >
-                      {approved.includes(store.name) ? "Aprobada" : "Aprobar"}
+                      {store.approved !== false && (approved.length === 0 || approved.includes(store.name)) ? "Aprobada" : "Aprobar"}
                     </button>
                   </div>
                 ))}

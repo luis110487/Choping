@@ -49,24 +49,26 @@ def products():
     result = [p for p in DEMO_PRODUCTS if not query or query in f"{p['name']} {p['category']} {p['description']} {p['store']}".lower()]
     return jsonify(result)
 
-def database_catalog():
+def database_catalog(include_pending=False):
     if not os.environ.get('DATABASE_URL'):
         return None
     try:
-        store_rows = db.session.execute(text('''
-            select id, name, owner_name, category, city, description, rating
+        store_query = '''
+            select id, name, owner_name, category, city, description, rating, approved
             from stores
-            where approved is true
+            {store_filter}
             order by created_at asc, id asc
-        ''')).mappings().all()
-        product_rows = db.session.execute(text('''
+        '''.format(store_filter='' if include_pending else 'where approved is true')
+        store_rows = db.session.execute(text(store_query)).mappings().all()
+        product_query = '''
             select p.id, p.store_id, p.name, p.category, p.description, p.story,
                    p.price, p.image, p.rating, p.review, p.likes, p.purchases
             from products p
             join stores s on s.id = p.store_id
-            where s.approved is true
+            {store_filter}
             order by p.created_at asc, p.id asc
-        ''')).mappings().all()
+        '''.format(store_filter='' if include_pending else 'where s.approved is true')
+        product_rows = db.session.execute(text(product_query)).mappings().all()
         image_rows = db.session.execute(text('''
             select product_id, image_url, position
             from product_images
@@ -86,6 +88,7 @@ def database_catalog():
                 'city': row['city'],
                 'description': row['description'],
                 'rating': float(row['rating'] or 0),
+                'approved': row['approved'] if 'approved' in row else True,
                 'products': [],
             }
             stores_by_id[row['id']] = store
@@ -118,7 +121,7 @@ def database_catalog():
 
 @app.get('/api/stores')
 def stores():
-    catalog = database_catalog()
+    catalog = database_catalog(request.args.get('include_pending') == 'true')
     if catalog is not None:
         return jsonify(catalog)
     result=[]
