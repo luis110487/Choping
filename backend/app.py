@@ -373,21 +373,26 @@ def create_admin_user():
         return jsonify({'error': 'Solo un superadmin puede crear administradores.'}), 403
     if role == 'tienda' and not store_name:
         return jsonify({'error': 'Selecciona la tienda que administrará este usuario.'}), 400
-    if LocalUser.query.filter_by(email=email).first():
-        return jsonify({'error': 'Ya existe un usuario con ese correo.'}), 409
+    account = LocalUser.query.filter_by(email=email).first()
     supabase_user, error = create_supabase_user(email, password, name, role, store_name)
     if error:
         return jsonify({'error': error}), 409 if 'registered' in error.lower() else 502
     if not sync_profile_role(supabase_user['id'], role):
         return jsonify({'error': 'Se creó la cuenta, pero no fue posible asignar su rol. Verifica la tabla profiles.'}), 500
-    account = LocalUser(
-        name=name,
-        email=email,
-        password_hash=generate_password_hash(password),
-        role=role,
-        store_name=store_name,
-    )
-    db.session.add(account)
+    if account:
+        account.name = name
+        account.password_hash = generate_password_hash(password)
+        account.role = role
+        account.store_name = store_name
+    else:
+        account = LocalUser(
+            name=name,
+            email=email,
+            password_hash=generate_password_hash(password),
+            role=role,
+            store_name=store_name,
+        )
+        db.session.add(account)
     db.session.commit()
     return jsonify({'user': {'name': name, 'email': email, 'role': role, 'store_name': store_name}}), 201
 

@@ -828,10 +828,6 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
       setUserMessage("Selecciona la tienda que tendrá asignada este usuario.");
       return;
     }
-    if (managedUsers.some((user) => user.email === email && user.email !== editingUser)) {
-      setUserMessage("Ya existe un usuario con ese correo.");
-      return;
-    }
     if (!authToken) {
       setUserMessage("Tu sesión de administrador expiró. Cierra sesión e ingresa nuevamente.");
       return;
