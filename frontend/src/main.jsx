@@ -718,6 +718,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     [newUserPassword, setNewUserPassword] = useState(""),
     [newUserRole, setNewUserRole] = useState("cliente"),
     [newUserStore, setNewUserStore] = useState(""),
+    [editingUser, setEditingUser] = useState(null),
     [userMessage, setUserMessage] = useState("");
   useEffect(() => {
     fetch(`${API}/api/stores?include_pending=true`)
@@ -798,24 +799,22 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     event.preventDefault();
     const name = newUserName.trim();
     const email = newUserEmail.trim().toLowerCase();
-    if (!name || !email || newUserPassword.length < 6) {
-      setUserMessage("La contraseña debe tener al menos 6 caracteres.");
+    if (!name || !email || (!editingUser && newUserPassword.length < 6) || (editingUser && newUserPassword && newUserPassword.length < 6)) {
+      setUserMessage(editingUser ? "La nueva contraseña debe tener al menos 6 caracteres." : "La contraseña debe tener al menos 6 caracteres.");
       return;
     }
     if (newUserRole === "tienda" && !newUserStore) {
       setUserMessage("Selecciona la tienda que tendrá asignada este usuario.");
       return;
     }
-    if (managedUsers.some((user) => user.email === email)) {
+    if (managedUsers.some((user) => user.email === email && user.email !== editingUser)) {
       setUserMessage("Ya existe un usuario con ese correo.");
       return;
     }
-    const next = [...managedUsers, {
-      name,
-      email,
-      role: newUserRole,
-      store_name: newUserRole === "tienda" ? newUserStore : "",
-    }];
+    const account = { name, email, role: newUserRole, store_name: newUserRole === "tienda" ? newUserStore : "" };
+    const next = editingUser
+      ? managedUsers.map((user) => user.email === editingUser ? { ...user, ...account } : user)
+      : [...managedUsers, account];
     setManagedUsers(next);
     localStorage.setItem("choping-registered-users", JSON.stringify(next));
     setNewUserName("");
@@ -823,7 +822,17 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     setNewUserPassword("");
     setNewUserRole("cliente");
     setNewUserStore("");
-    setUserMessage("Usuario creado correctamente.");
+    setEditingUser(null);
+    setUserMessage(editingUser ? "Usuario actualizado correctamente." : "Usuario creado correctamente.");
+  };
+  const editUser = (account) => {
+    setEditingUser(account.email);
+    setNewUserName(account.name || "");
+    setNewUserEmail(account.email || "");
+    setNewUserPassword("");
+    setNewUserRole(account.role || "cliente");
+    setNewUserStore(account.store_name || "");
+    setUserMessage("");
   };
   const platformUsers = JSON.parse(localStorage.getItem("choping-registered-users") || "[]");
   const totalProducts = stores.reduce((total, item) => total + item.products.length, 0);
@@ -942,14 +951,14 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
               <form className="admin-user-form" onSubmit={saveUser}>
                 <label>Nombre completo<input value={newUserName} onChange={(event) => setNewUserName(event.target.value)} required /></label>
                 <label>Correo electrónico<input type="email" value={newUserEmail} onChange={(event) => setNewUserEmail(event.target.value)} required /></label>
-                <label>Contraseña<input type="password" value={newUserPassword} onChange={(event) => setNewUserPassword(event.target.value)} minLength="6" required /></label>
+                <label>Contraseña{editingUser && <small className="admin-field-hint">Déjala vacía para conservarla</small>}<input type="password" value={newUserPassword} onChange={(event) => setNewUserPassword(event.target.value)} minLength="6" required={!editingUser} /></label>
                 <label>Rol<select value={newUserRole} onChange={(event) => { setNewUserRole(event.target.value); setNewUserStore(""); }}><option value="cliente">Cliente</option><option value="tienda">Tienda</option><option value="admin">Administrador</option><option value="superadmin">Superadmin</option></select></label>
                 {newUserRole === "tienda" && <label>Tienda asignada<select value={newUserStore} onChange={(event) => setNewUserStore(event.target.value)} required><option value="">Selecciona una tienda</option>{stores.map((store) => <option key={store.name} value={store.name}>{store.name} · {store.city || "Colombia"}</option>)}</select></label>}
-                <button className="btn" type="submit">Crear usuario</button>
+                <div className="admin-user-actions"><button className="btn" type="submit">{editingUser ? "Guardar cambios" : "Crear usuario"}</button>{editingUser && <button className="nav-link" type="button" onClick={() => { setEditingUser(null); setNewUserName(""); setNewUserEmail(""); setNewUserPassword(""); setNewUserRole("cliente"); setNewUserStore(""); }}>Cancelar</button>}</div>
               </form>
               {userMessage && <p className="admin-category-message">{userMessage}</p>}
               <div className="admin-user-list">
-                {managedUsers.length ? managedUsers.map((account) => <div className="admin-user-row" key={account.email}><span className="admin-user-avatar">{(account.name || account.email).slice(0, 1).toUpperCase()}</span><div><strong>{account.name || "Usuario"}</strong><small>{account.email}</small></div><span className={`admin-role-badge role-${account.role}`}>{account.role}</span>{account.role === "tienda" && <small>{account.store_name || "Sin tienda asignada"}</small>}</div>) : <div className="store-admin-empty"><strong>Aún no hay usuarios creados</strong><span>Los usuarios nuevos aparecerán aquí.</span></div>}
+                {managedUsers.length ? managedUsers.map((account) => <div className="admin-user-row" key={account.email}><span className="admin-user-avatar">{(account.name || account.email).slice(0, 1).toUpperCase()}</span><div><strong>{account.name || "Usuario"}</strong><small>{account.email}</small></div><span className={`admin-role-badge role-${account.role}`}>{account.role}</span>{account.role === "tienda" && <small>{account.store_name || "Sin tienda asignada"}</small>}<button className="admin-user-edit" type="button" onClick={() => editUser(account)}>Editar</button></div>) : <div className="store-admin-empty"><strong>Aún no hay usuarios creados</strong><span>Los usuarios nuevos aparecerán aquí.</span></div>}
               </div>
             </>
           ) : tab === "categories" ? (
