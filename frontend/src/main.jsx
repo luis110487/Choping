@@ -650,6 +650,12 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
     "/banner-home-2.png",
     "/banner-home-3.png",
   ];
+  const defaultCategories = [
+    { id: "tecnologia", name: "Tecnologia", icon: "💻" },
+    { id: "hogar", name: "Hogar", icon: "⌂" },
+    { id: "movilidad", name: "Movilidad", icon: "🚲" },
+    { id: "moda", name: "Moda", icon: "✦" },
+  ];
   const [images, setImages] = useState(() =>
     JSON.parse(localStorage.getItem("choping-home-banners") || "null") || defaultImages,
   );
@@ -657,7 +663,14 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
     [managedStores, setManagedStores] = useState(stores),
     [approved, setApproved] = useState(() =>
       JSON.parse(localStorage.getItem("choping-approved-stores") || "[]"),
-    );
+    ),
+    [categories, setCategories] = useState(() =>
+      JSON.parse(localStorage.getItem("choping-categories") || "null") || defaultCategories,
+    ),
+    [categoryName, setCategoryName] = useState(""),
+    [categoryIcon, setCategoryIcon] = useState("▦"),
+    [editingCategory, setEditingCategory] = useState(null),
+    [categoryMessage, setCategoryMessage] = useState("");
   useEffect(() => {
     fetch(`${API}/api/stores?include_pending=true`)
       .then((response) => response.json())
@@ -682,6 +695,45 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
     };
     reader.readAsDataURL(file);
   };
+  const saveCategory = (event) => {
+    event.preventDefault();
+    const name = categoryName.trim();
+    if (!name) return;
+    const duplicate = categories.some(
+      (category) => category.name.toLowerCase() === name.toLowerCase() && category.id !== editingCategory,
+    );
+    if (duplicate) {
+      setCategoryMessage("Ya existe una categoría con ese nombre.");
+      return;
+    }
+    const next = editingCategory
+      ? categories.map((category) =>
+          category.id === editingCategory ? { ...category, name, icon: categoryIcon } : category,
+        )
+      : [...categories, { id: `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}`, name, icon: categoryIcon }];
+    setCategories(next);
+    localStorage.setItem("choping-categories", JSON.stringify(next));
+    setCategoryName("");
+    setCategoryIcon("▦");
+    setEditingCategory(null);
+    setCategoryMessage(editingCategory ? "Categoría actualizada." : "Categoría creada.");
+  };
+  const editCategory = (category) => {
+    setEditingCategory(category.id);
+    setCategoryName(category.name);
+    setCategoryIcon(category.icon);
+    setCategoryMessage("");
+  };
+  const removeCategory = (id) => {
+    const next = categories.filter((category) => category.id !== id);
+    setCategories(next);
+    localStorage.setItem("choping-categories", JSON.stringify(next));
+    if (editingCategory === id) {
+      setEditingCategory(null);
+      setCategoryName("");
+      setCategoryIcon("▦");
+    }
+  };
   return (
     <div className="overlay admin-overlay">
       <section className="admin-dashboard-panel">
@@ -692,7 +744,7 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
           <small>GESTIÓN GENERAL</small>
           <button className={tab === "stores" ? "active" : ""} onClick={() => setTab("stores")}>▣ <span>Tiendas</span></button>
           <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>◇ <span>Productos</span></button>
-          <button onClick={() => setTab("summary")}>▦ <span>Categorías</span></button>
+          <button className={tab === "categories" ? "active" : ""} onClick={() => setTab("categories")}>▦ <span>Categorías</span></button>
           <button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>⚑ <span>Solicitudes</span></button>
           <small>CONFIGURACIÓN</small>
           <button onClick={() => setTab("summary")}>⚙ <span>Roles y permisos</span></button>
@@ -740,6 +792,12 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
             >
               Productos
             </button>
+            <button
+              className={tab === "categories" ? "selected" : ""}
+              onClick={() => setTab("categories")}
+            >
+              Categorías
+            </button>
           </div>
           {tab === "summary" ? (
             <>
@@ -755,6 +813,45 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
                 <p><b>Admin:</b> banners, tiendas y productos.</p>
                 <p><b>Tienda:</b> catálogo, categorías y personalización de su tienda.</p>
                 <p><b>Cliente:</b> compras, pedidos y reseñas verificadas.</p>
+              </div>
+            </>
+          ) : tab === "categories" ? (
+            <>
+              <h2>Gestión de categorías</h2>
+              <p>Crea y organiza las categorías que se mostrarán en tiendas y productos.</p>
+              <form className="admin-category-form" onSubmit={saveCategory}>
+                <label>
+                  Nombre de la categoría
+                  <input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="Ej. Ferretería" required />
+                </label>
+                <label>
+                  Icono
+                  <select value={categoryIcon} onChange={(event) => setCategoryIcon(event.target.value)}>
+                    <option value="▦">▦ General</option>
+                    <option value="💻">💻 Tecnología</option>
+                    <option value="⌂">⌂ Hogar</option>
+                    <option value="🚲">🚲 Movilidad</option>
+                    <option value="✦">✦ Moda</option>
+                    <option value="⚒">⚒ Ferretería</option>
+                    <option value="✚">✚ Salud</option>
+                    <option value="♢">♢ Servicios</option>
+                  </select>
+                </label>
+                <div className="admin-category-actions">
+                  <button className="btn" type="submit">{editingCategory ? "Guardar cambios" : "Crear categoría"}</button>
+                  {editingCategory && <button className="nav-link" type="button" onClick={() => { setEditingCategory(null); setCategoryName(""); setCategoryIcon("▦"); }}>Cancelar</button>}
+                </div>
+              </form>
+              {categoryMessage && <p className="admin-category-message">{categoryMessage}</p>}
+              <div className="admin-category-list">
+                {categories.map((category) => (
+                  <div className="admin-category-row" key={category.id}>
+                    <span className="admin-category-icon" aria-hidden="true">{category.icon}</span>
+                    <strong>{category.name}</strong>
+                    <button type="button" onClick={() => editCategory(category)}>Editar</button>
+                    <button className="delete" type="button" onClick={() => removeCategory(category.id)}>Eliminar</button>
+                  </div>
+                ))}
               </div>
             </>
           ) : tab === "banners" ? (
