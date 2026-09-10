@@ -18,6 +18,13 @@ const normalizeAccount = (account) =>
   account && isPlatformAdmin(account)
     ? { ...account, role: "superadmin" }
     : account;
+const loadCurrentUser = () => {
+  const current = JSON.parse(localStorage.getItem("choping-user") || "null");
+  if (!current) return null;
+  const registeredAccount = JSON.parse(localStorage.getItem("choping-registered-users") || "[]")
+    .find((account) => account.email === current.email);
+  return normalizeAccount({ ...current, ...registeredAccount });
+};
 const Stars = ({ value }) => (
   <span className="stars">
     ★★★★★ <b>{value}</b>
@@ -45,7 +52,7 @@ function App() {
       Number(localStorage.getItem("choping-directory-banner") || 0),
     ),
     [adminOpen, setAdminOpen] = useState(false),
-    [user, setUser] = useState(() => normalizeAccount(JSON.parse(localStorage.getItem("choping-user") || "null"))),
+    [user, setUser] = useState(loadCurrentUser),
     [profileOpen, setProfileOpen] = useState(() => localStorage.getItem("choping-profile-open") === "true"),
     [storeAdminOpen, setStoreAdminOpen] = useState(false),
     [storeThemes, setStoreThemes] = useState(() =>
