@@ -512,6 +512,10 @@ function App() {
             setStoreThemes(next);
             localStorage.setItem("choping-store-themes", JSON.stringify(next));
           }}
+          viewStore={() => {
+            setProfileOpen(false);
+            setStoreAdminOpen(false);
+          }}
           close={() => setStoreAdminOpen(false)}
         />
       )}
@@ -1177,7 +1181,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     </div>
   );
 }
-function StoreAdminPanel({ store, theme, setTheme, createProduct, close }) {
+function StoreAdminPanel({ store, theme, setTheme, createProduct, viewStore, close }) {
   const themes = [
     { id: "ocean", name: "Ocean", detail: "Azul, limpia y tecnológica" },
     { id: "sunset", name: "Sunset", detail: "Cálida y comercial" },
@@ -1253,6 +1257,7 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, close }) {
       <section className="store-admin-panel">
         <aside className="store-admin-sidebar">
           <div className="store-admin-brand"><strong>CHOPING</strong><span>Mi tienda</span></div>
+          <button className="store-admin-preview" onClick={viewStore}>↗ <span>Ver mi tienda</span></button>
           <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")}>⌂ <span>Inicio</span></button>
           <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>◇ <span>Productos</span></button>
           <button className={tab === "store" ? "active" : ""} onClick={() => setTab("store")}>▣ <span>Mi tienda</span></button>
