@@ -57,8 +57,18 @@ function App() {
   useEffect(() => {
     fetch(`${API}/api/stores`)
       .then((r) => r.json())
-      .then(setStores);
+      .then((data) => setStores(Array.isArray(data) ? data : []));
   }, []);
+  useEffect(() => {
+    if (user?.role !== "tienda" || store || !user.store_name) return;
+    const assignedStore = stores.find(
+      (item) => item.name.toLowerCase() === user.store_name.toLowerCase(),
+    );
+    if (assignedStore) {
+      setStore(assignedStore);
+      setStoreAdminOpen(true);
+    }
+  }, [stores, user, store]);
   useEffect(
     () => localStorage.setItem("choping-cart", JSON.stringify(cart)),
     [cart],
@@ -359,10 +369,21 @@ function App() {
           close={() => setLoginOpen(false)}
           currentStore={store?.name || ""}
           onLogin={(nextUser) => {
-            const normalizedUser = normalizeAccount(nextUser);
+            const registeredAccount = JSON.parse(localStorage.getItem("choping-registered-users") || "[]")
+              .find((account) => account.email === nextUser.email);
+            const normalizedUser = normalizeAccount({ ...nextUser, ...registeredAccount });
             setUser(normalizedUser);
             localStorage.setItem("choping-user", JSON.stringify(normalizedUser));
             setLoginOpen(false);
+            if (normalizedUser.role === "tienda") {
+              const assignedStore = stores.find(
+                (item) => item.name.toLowerCase() === normalizedUser.store_name?.toLowerCase(),
+              );
+              if (assignedStore) {
+                setStore(assignedStore);
+                setStoreAdminOpen(true);
+              }
+            }
           }}
         />
       )}
