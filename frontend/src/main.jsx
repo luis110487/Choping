@@ -7,14 +7,49 @@ const API = (import.meta.env.VITE_API_URL || "http://127.0.0.1:5000")
 const money = (n) => "$" + Number(n).toLocaleString("es-CO");
 const productImageUrl = (image) =>
   image && /^(https?:)?\/\//i.test(image) ? image : `${API}/static/img/${image || "products/pc-gamer.png"}`;
-const defaultProductCategories = ["Tecnologia", "Hogar", "Movilidad", "Moda"];
-const configuredCategories = () => {
+const CATEGORY_CATALOG = [
+  { id: "tecnologia", name: "Tecnologia", icon: "💻" },
+  { id: "celulares", name: "Celulares", icon: "📱" },
+  { id: "computadores", name: "Computadores", icon: "🖥" },
+  { id: "audio", name: "Audio", icon: "🎧" },
+  { id: "videojuegos", name: "Videojuegos", icon: "🎮" },
+  { id: "electrodomesticos", name: "Electrodomesticos", icon: "⚡" },
+  { id: "hogar", name: "Hogar", icon: "⌂" },
+  { id: "muebles", name: "Muebles", icon: "🛋" },
+  { id: "decoracion", name: "Decoracion", icon: "🖼" },
+  { id: "cocina", name: "Cocina", icon: "🍳" },
+  { id: "jardin", name: "Jardin", icon: "🌿" },
+  { id: "ferreteria", name: "Ferreteria", icon: "⚒" },
+  { id: "herramientas", name: "Herramientas", icon: "🔧" },
+  { id: "construccion", name: "Construccion", icon: "🧱" },
+  { id: "moda", name: "Moda", icon: "👕" },
+  { id: "calzado", name: "Calzado", icon: "👟" },
+  { id: "belleza", name: "Belleza", icon: "✨" },
+  { id: "peluqueria", name: "Peluqueria", icon: "✂" },
+  { id: "drogueria", name: "Drogueria", icon: "✚" },
+  { id: "salud", name: "Salud", icon: "♥" },
+  { id: "bebe", name: "Bebe", icon: "🍼" },
+  { id: "juguetes", name: "Juguetes", icon: "🧸" },
+  { id: "mascotas", name: "Mascotas", icon: "🐾" },
+  { id: "deportes", name: "Deportes", icon: "⚽" },
+  { id: "movilidad", name: "Movilidad", icon: "🚲" },
+  { id: "automotriz", name: "Automotriz", icon: "🚗" },
+  { id: "alimentos", name: "Alimentos", icon: "🛒" },
+  { id: "papeleria", name: "Papeleria", icon: "📚" },
+  { id: "oficina", name: "Oficina", icon: "💼" },
+];
+const defaultProductCategories = CATEGORY_CATALOG.map((category) => category.name);
+const configuredCategoryEntries = () => {
   try {
-    const categories = JSON.parse(localStorage.getItem("choping-categories") || "null");
-    return Array.isArray(categories) && categories.length ? categories.map((category) => category.name) : defaultProductCategories;
+    const stored = JSON.parse(localStorage.getItem("choping-categories") || "null");
+    const additions = Array.isArray(stored) ? stored : [];
+    return [...CATEGORY_CATALOG, ...additions.filter((category) => !CATEGORY_CATALOG.some((item) => item.name.toLowerCase() === category.name?.toLowerCase()))];
   } catch {
-    return defaultProductCategories;
+    return CATEGORY_CATALOG;
   }
+};
+const configuredCategories = () => {
+  return configuredCategoryEntries().map((category) => category.name);
 };
 const SUPERADMIN_EMAILS = new Set([
   "luis.gamarra@techdatasync.com",
@@ -105,19 +140,15 @@ function App() {
   const categories = store
     ? [...new Set(store.products.map((p) => p.category))]
     : [];
-  const storeCategoryFilters = [
-    ["", "Todas", "▦"],
-    ["Tecnologia", "Tecnología", "⌁"],
-    ["Ferreteria", "Ferreterías", "⚒"],
-    ["Drogueria", "Droguerías", "+"],
-    ["Peluqueria", "Peluquerías", "✂"],
-  ];
+  const categoryIcons = new Map(configuredCategoryEntries().map((category) => [category.name, category.icon]));
+  const activeStoreCategories = [...new Set(stores.flatMap((item) => item.products.map((product) => product.category)).filter(Boolean))];
+  const storeCategoryFilters = [["", "Todas", "▦"], ...activeStoreCategories.map((category) => [category, category, categoryIcons.get(category) || "▦"])];
   const visibleStores = stores.filter((s) => {
     const text =
       `${s.name} ${s.category} ${s.products.map((p) => `${p.name} ${p.category}`).join(" ")}`.toLowerCase();
     return (
       (!query || text.includes(query.toLowerCase())) &&
-      (!categoryFilter || s.category.toLowerCase() === categoryFilter.toLowerCase())
+      (!categoryFilter || s.products.some((product) => product.category.toLowerCase() === categoryFilter.toLowerCase()))
     );
   });
   const featuredStoreNames = ["Tech Zone", "Casa Viva"];
@@ -745,12 +776,6 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     "/banner-home-2.png",
     "/banner-home-3.png",
   ];
-  const defaultCategories = [
-    { id: "tecnologia", name: "Tecnologia", icon: "💻" },
-    { id: "hogar", name: "Hogar", icon: "⌂" },
-    { id: "movilidad", name: "Movilidad", icon: "🚲" },
-    { id: "moda", name: "Moda", icon: "✦" },
-  ];
   const directoryDefaultImages = [
     "/banner-home-2.png",
     "/banner-home-3.png",
@@ -768,7 +793,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
       JSON.parse(localStorage.getItem("choping-approved-stores") || "[]"),
     ),
     [categories, setCategories] = useState(() =>
-      JSON.parse(localStorage.getItem("choping-categories") || "null") || defaultCategories,
+      configuredCategoryEntries(),
     ),
     [categoryName, setCategoryName] = useState(""),
     [categoryIcon, setCategoryIcon] = useState("▦"),
