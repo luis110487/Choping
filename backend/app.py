@@ -1,6 +1,7 @@
 import os
 import json
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -50,7 +51,12 @@ for product in DEMO_PRODUCTS:
 
 @app.get('/api/health')
 def health():
-    return jsonify({'status': 'ok', 'database': 'configured' if os.environ.get('DATABASE_URL') else 'sqlite-local'})
+    supabase_url, supabase_key = supabase_auth_credentials()
+    return jsonify({
+        'status': 'ok',
+        'database': 'configured' if os.environ.get('DATABASE_URL') else 'sqlite-local',
+        'supabase_auth_configured': bool(supabase_url and supabase_key),
+    })
 
 @app.get('/api/products')
 def products():
@@ -149,6 +155,21 @@ def profile_role(email):
     if not os.environ.get('DATABASE_URL'):
         return None
 
+def supabase_auth_credentials():
+    supabase_url = os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
+    supabase_key = (
+        os.environ.get('SUPABASE_ANON_KEY', '').strip()
+        or os.environ.get('SUPABASE_PUBLISHABLE_KEY', '').strip()
+        or os.environ.get('SUPABASE_KEY', '').strip()
+    )
+    if not supabase_url:
+        database_url = os.environ.get('DATABASE_URL', '')
+        database_user = urlparse(database_url.replace('postgres://', 'postgresql://', 1)).username or ''
+        if database_user.startswith('postgres.'):
+            project_ref = database_user.split('.', 1)[1]
+            supabase_url = f'https://{project_ref}.supabase.co'
+    return supabase_url, supabase_key
+
 def supabase_password_login(email, password):
     """Authenticate users already managed by Supabase Auth.
 
@@ -156,11 +177,7 @@ def supabase_password_login(email, password):
     fallback lets existing Supabase users (including store owners) use the
     same login form during the migration.
     """
-    supabase_url = os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
-    supabase_key = (
-        os.environ.get('SUPABASE_ANON_KEY', '').strip()
-        or os.environ.get('SUPABASE_KEY', '').strip()
-    )
+    supabase_url, supabase_key = supabase_auth_credentials()
     if not supabase_url or not supabase_key:
         return None
     payload = json.dumps({'email': email, 'password': password}).encode('utf-8')
@@ -235,9 +252,7 @@ def login():
             'luis.gamarra@techdatasyn.com',
         })
     account = LocalUser.query.filter_by(email=email).first()
-    if account:
-        if not check_password_hash(account.password_hash, data['password']):
-            return jsonify({'error': 'Correo o contraseña incorrectos'}), 401
+    if account and check_password_hash(account.password_hash, data['password']):
         return jsonify({'user': {'email': account.email, 'name': account.name, 'role': account.role, 'phone': account.phone, 'store_name': account.store_name}})
     supabase_user = supabase_password_login(email, data['password'])
     if supabase_user:
