@@ -266,6 +266,18 @@ function App() {
               <div className="store-grid">{renderStoreCards(featuredStores, true)}</div>
             </section>
           )}
+          {featuredStores.length > 0 && otherStores.length > 0 && (
+            <section className="directory-inline-banner" aria-label="Banners de tiendas">
+              <BannerSlider
+                storeName={null}
+                banner={banner}
+                setBanner={(value) => {
+                  setBanner(value);
+                  localStorage.setItem("choping-banner", String(value));
+                }}
+              />
+            </section>
+          )}
           {otherStores.length > 0 && (
             <section className="store-directory-section other-stores-section">
               <div className="store-section-heading">
