@@ -747,6 +747,12 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     setCategoryIcon(category.icon);
     setCategoryMessage("");
   };
+  const changeCategoryIcon = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setCategoryIcon(reader.result);
+    reader.readAsDataURL(file);
+  };
   const removeCategory = (id) => {
     const next = categories.filter((category) => category.id !== id);
     setCategories(next);
@@ -855,7 +861,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
                 </label>
                 <label>
                   Icono
-                  <select value={categoryIcon} onChange={(event) => setCategoryIcon(event.target.value)}>
+                  <select value={categoryIcon.startsWith("data:image/") ? "custom" : categoryIcon} onChange={(event) => event.target.value !== "custom" && setCategoryIcon(event.target.value)}>
                     <option value="▦">▦ General</option>
                     <option value="💻">💻 Tecnología</option>
                     <option value="⌂">⌂ Hogar</option>
@@ -864,7 +870,13 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
                     <option value="⚒">⚒ Ferretería</option>
                     <option value="✚">✚ Salud</option>
                     <option value="♢">♢ Servicios</option>
+                    {categoryIcon.startsWith("data:image/") && <option value="custom">Imagen personalizada</option>}
                   </select>
+                </label>
+                <label className="admin-category-icon-upload">
+                  Icono personalizado
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(event) => changeCategoryIcon(event.target.files?.[0])} />
+                  <span>{categoryIcon.startsWith("data:image/") ? "Icono cargado. Puedes reemplazarlo." : "Sube PNG, JPG, WEBP o SVG"}</span>
                 </label>
                 <div className="admin-category-actions">
                   <button className="btn" type="submit">{editingCategory ? "Guardar cambios" : "Crear categoría"}</button>
@@ -875,7 +887,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
               <div className="admin-category-list">
                 {categories.map((category) => (
                   <div className="admin-category-row" key={category.id}>
-                    <span className="admin-category-icon" aria-hidden="true">{category.icon}</span>
+                    <span className="admin-category-icon" aria-hidden="true">{category.icon.startsWith("data:image/") ? <img src={category.icon} alt="" /> : category.icon}</span>
                     <strong>{category.name}</strong>
                     <button type="button" onClick={() => editCategory(category)}>Editar</button>
                     <button className="delete" type="button" onClick={() => removeCategory(category.id)}>Eliminar</button>
