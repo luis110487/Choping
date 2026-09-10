@@ -650,7 +650,8 @@ function AdminBannerPanel({ stores, banner, setBanner, close }) {
     <div className="overlay admin-overlay">
       <section className="admin-dashboard-panel">
         <aside className="admin-sidebar">
-          <div className="admin-brand"><strong>CHOPING</strong><span>Administración global</span></div>
+          <div className="admin-brand"><img src={`${API}/static/img/choping-logo.png`} alt="Choping" /><span>Administración global</span></div>
+          <button className="admin-back-button" onClick={close}>← <span>Ir a tiendas</span></button>
           <button className={tab === "summary" ? "active" : ""} onClick={() => setTab("summary")}>⌂ <span>Dashboard</span></button>
           <small>GESTIÓN GENERAL</small>
           <button className={tab === "stores" ? "active" : ""} onClick={() => setTab("stores")}>▣ <span>Tiendas</span></button>
