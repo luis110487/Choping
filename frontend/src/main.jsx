@@ -820,6 +820,15 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     setNewUserStore("");
     setUserMessage("Usuario creado correctamente.");
   };
+  const platformUsers = JSON.parse(localStorage.getItem("choping-registered-users") || "[]");
+  const totalProducts = stores.reduce((total, item) => total + item.products.length, 0);
+  const totalPurchases = stores.reduce(
+    (total, item) => total + item.products.reduce((subtotal, product) => subtotal + Number(product.purchases || 0), 0),
+    0,
+  );
+  const approvedStores = managedStores.filter((item) => item.approved !== false).length;
+  const pendingStores = managedStores.filter((item) => item.approved === false).length;
+  const approvalProgress = managedStores.length ? Math.round((approvedStores / managedStores.length) * 100) : 0;
   return (
     <div className="overlay admin-overlay">
       <section className="admin-dashboard-panel">
@@ -900,12 +909,18 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
           </div>
           {tab === "summary" ? (
             <>
-              <h2>Resumen administrativo</h2>
+              <h2>Dashboard de la plataforma</h2>
+              <p>Consulta el progreso general de Choping en tiempo real.</p>
               <div className="admin-summary-grid">
                 <div><strong>{stores.length}</strong><span>Tiendas registradas</span></div>
-                <div><strong>{stores.filter((store) => approved.includes(store.name) || !approved.length).length}</strong><span>Tiendas aprobadas</span></div>
-                <div><strong>{stores.reduce((total, store) => total + store.products.length, 0)}</strong><span>Productos publicados</span></div>
+                <div><strong>{approvedStores}</strong><span>Tiendas activas</span></div>
+                <div><strong>{totalProducts}</strong><span>Productos publicados</span></div>
+                <div><strong>{platformUsers.length}</strong><span>Usuarios registrados</span></div>
+                <div><strong>{totalPurchases}</strong><span>Compras acumuladas</span></div>
+                <div><strong>{pendingStores}</strong><span>Solicitudes pendientes</span></div>
               </div>
+              <div className="admin-progress-panel"><div className="admin-progress-heading"><h3>Progreso de la plataforma</h3><strong>{approvalProgress}%</strong></div><p>Aprobación de tiendas registradas</p><div className="admin-progress-track"><span style={{ width: `${approvalProgress}%` }} /></div><div className="admin-progress-legend"><span><i className="progress-dot active" />{approvedStores} activas</span><span><i className="progress-dot pending" />{pendingStores} pendientes</span></div></div>
+              <div className="admin-overview-columns"><section className="admin-overview-card"><h3>Actividad del catálogo</h3><div><span>Tiendas con productos</span><strong>{stores.filter((item) => item.products.length > 0).length} / {stores.length}</strong></div><div><span>Promedio de productos por tienda</span><strong>{stores.length ? (totalProducts / stores.length).toFixed(1) : "0.0"}</strong></div><div><span>Compras acumuladas</span><strong>{totalPurchases}</strong></div></section><section className="admin-overview-card"><h3>Distribución de usuarios</h3><div><span>Clientes</span><strong>{platformUsers.filter((item) => item.role === "cliente").length}</strong></div><div><span>Tiendas</span><strong>{platformUsers.filter((item) => item.role === "tienda").length}</strong></div><div><span>Administradores</span><strong>{platformUsers.filter((item) => ["admin", "superadmin"].includes(item.role)).length}</strong></div></section></div>
               <div className="admin-roles">
                 <h3>Roles del sistema</h3>
                 <p><b>Superadmin:</b> configuración global y control administrativo.</p>
