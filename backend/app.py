@@ -455,6 +455,9 @@ def update_admin_user(email):
     account.store_name = store_name if role == 'tienda' else ''
     if password:
         account.password_hash = generate_password_hash(password)
+    auth_user_id = auth_user_id_by_email(account.email)
+    if auth_user_id and not sync_profile_role(auth_user_id, role):
+        return jsonify({'error': 'No fue posible actualizar el rol en profiles.'}), 500
     db.session.commit()
     return jsonify({'user': {'name': account.name, 'email': account.email, 'role': account.role, 'store_name': account.store_name}})
 

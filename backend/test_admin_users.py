@@ -115,6 +115,30 @@ class AdminUserProvisioningTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(LocalUser.query.filter_by(email='movilstore@gmail.com').first().role, 'tienda')
 
+    @patch('app.sync_profile_role', return_value=True)
+    @patch('app.auth_user_id_by_email', return_value='existing-supabase-user-id')
+    def test_editing_user_syncs_its_profile_role(self, mock_user_id, mock_profile_sync):
+        db.session.add(LocalUser(
+            name='Casa Viva',
+            email='casaviva@gmail.com',
+            password_hash='old-hash',
+            role='cliente',
+        ))
+        db.session.commit()
+        login = self.client.post('/api/auth/login', json={
+            'email': 'luis.gamarra@techdatasync.com',
+            'password': 'test-superadmin-password',
+        })
+        response = self.client.put(
+            '/api/admin/users/casaviva@gmail.com',
+            headers={'Authorization': f"Bearer {login.get_json()['access_token']}"},
+            json={'name': 'Casa Viva', 'role': 'tienda', 'store_name': 'Casa Viva'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        mock_user_id.assert_called_once_with('casaviva@gmail.com')
+        mock_profile_sync.assert_called_once_with('existing-supabase-user-id', 'tienda')
+
 
 if __name__ == '__main__':
     unittest.main()
