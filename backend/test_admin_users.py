@@ -511,6 +511,68 @@ class AdminUserProvisioningTests(unittest.TestCase):
             staff, _ = visible_pending_catalog({'role': 'superadmin'})
             self.assertEqual(len(staff), 2)
 
+    def test_password_change_requires_the_current_one(self):
+        headers = self.store_session(store_name='Casa Viva', email='casaviva@gmail.com')
+
+        wrong = self.client.put('/api/auth/password', headers=headers,
+                                json={'current': 'noesesta', 'password': 'NuevaClave123'})
+        self.assertEqual(wrong.status_code, 403)
+
+        short = self.client.put('/api/auth/password', headers=headers,
+                                json={'current': 'Clave123', 'password': 'corta'})
+        self.assertEqual(short.status_code, 400)
+
+        same = self.client.put('/api/auth/password', headers=headers,
+                               json={'current': 'Clave123', 'password': 'Clave123'})
+        self.assertEqual(same.status_code, 400)
+
+        ok = self.client.put('/api/auth/password', headers=headers,
+                             json={'current': 'Clave123', 'password': 'NuevaClave123'})
+        self.assertEqual(ok.status_code, 200)
+
+        # El cambio es real, no una marca en el navegador.
+        self.assertEqual(
+            self.client.post('/api/auth/login', json={'email': 'casaviva@gmail.com', 'password': 'Clave123'}).status_code,
+            401,
+        )
+        self.assertEqual(
+            self.client.post('/api/auth/login', json={'email': 'casaviva@gmail.com', 'password': 'NuevaClave123'}).status_code,
+            200,
+        )
+
+    def test_password_change_needs_a_session(self):
+        self.assertEqual(
+            self.client.put('/api/auth/password', json={'current': 'a', 'password': 'NuevaClave123'}).status_code,
+            401,
+        )
+
+    def test_store_profile_validates_and_isolates(self):
+        headers = self.store_session(store_name='Casa Viva', email='casaviva@gmail.com')
+
+        self.assertEqual(
+            self.client.put('/api/store/profile', headers=headers,
+                            json={'category': '', 'city': 'Barranquilla'}).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.put('/api/store/profile', headers=headers,
+                            json={'category': 'Hogar', 'city': ''}).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.put('/api/store/profile', headers=headers,
+                            json={'store': 'Tech Zone', 'category': 'Hogar', 'city': 'Barranquilla'}).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.put('/api/store/profile', json={'category': 'Hogar', 'city': 'Barranquilla'}).status_code,
+            401,
+        )
+        mismatch = self.client.put('/api/store/profile', headers=headers, json={
+            'category': 'Hogar', 'city': 'Barranquilla', 'department': 'Cesar',
+        })
+        self.assertEqual(mismatch.status_code, 400)
+
 
 if __name__ == '__main__':
     unittest.main()

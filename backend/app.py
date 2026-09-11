@@ -1046,6 +1046,87 @@ def supabase_password_login(email, password):
         'store_name': metadata.get('store_name', ''),
     }
 
+@app.put('/api/auth/password')
+def change_password():
+    """Change the password of the signed in account.
+
+    Until now the interface only wrote a flag in localStorage and told the
+    user it had worked, so nobody's password ever changed.
+    """
+    actor = authenticated_session()
+    if not actor:
+        return jsonify({'error': 'Tu sesion expiro. Inicia sesion nuevamente.'}), 401
+    data = request.get_json(silent=True) or {}
+    current = data.get('current', '')
+    new_password = data.get('password', '')
+    if len(new_password) < 8:
+        return jsonify({'error': 'La nueva contraseña debe tener al menos 8 caracteres.'}), 400
+    if new_password == current:
+        return jsonify({'error': 'La nueva contraseña debe ser distinta de la actual.'}), 400
+    account = LocalUser.query.filter_by(email=(actor.get('email') or '').strip().lower()).first()
+    if not account:
+        return jsonify({
+            'error': 'Esta cuenta se administra desde Supabase; cambia la contraseña desde alli.',
+        }), 400
+    if not account.active:
+        return jsonify({'error': 'Esta cuenta esta desactivada. Contacta al administrador.'}), 403
+    if not check_password_hash(account.password_hash, current):
+        return jsonify({'error': 'La contraseña actual no es correcta.'}), 403
+    try:
+        account.password_hash = generate_password_hash(new_password)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible actualizar la contraseña.'}), 500
+    return jsonify({'ok': True})
+
+
+@app.put('/api/store/profile')
+def update_store_profile():
+    """Store owners edit their own visible information."""
+    data = request.get_json(silent=True) or {}
+    store_name, error, status = store_for_actor(authenticated_session(), data.get('store'))
+    if error:
+        return jsonify({'error': error}), status
+    category = (data.get('category') or '').strip()
+    city = (data.get('city') or '').strip()
+    description = (data.get('description') or '').strip()
+    department = (data.get('department') or '').strip()
+    if not category or len(category) > 60:
+        return jsonify({'error': 'Selecciona una categoria valida.'}), 400
+    if not city or len(city) > 80:
+        return jsonify({'error': 'Indica la ciudad de la tienda.'}), 400
+    if len(description) > 600:
+        return jsonify({'error': 'La descripcion no puede superar 600 caracteres.'}), 400
+    if department and not valid_location(department, city):
+        return jsonify({'error': 'La ciudad no pertenece al departamento seleccionado.'}), 400
+    if not os.environ.get('DATABASE_URL'):
+        return jsonify({'error': 'Esta accion requiere la base de datos configurada.'}), 503
+    columns = 'category = :category, city = :city, description = :description'
+    params = {'category': category, 'city': city, 'description': description, 'name': store_name}
+    if department and ensure_store_department_column():
+        columns += ', department = :department'
+        params['department'] = department
+    try:
+        result = db.session.execute(
+            text(f'update stores set {columns} where lower(name) = lower(:name)'), params
+        )
+        if not result.rowcount:
+            db.session.rollback()
+            return jsonify({'error': 'No encontramos esa tienda.'}), 404
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible guardar la informacion.'}), 500
+    return jsonify({'store': {
+        'name': store_name,
+        'category': category,
+        'city': city,
+        'description': description,
+        'department': department,
+    }})
+
+
 @app.get('/api/auth/session')
 def read_session():
     """Confirm a stored token still works.

@@ -442,3 +442,14 @@ button.admin-status-toggle.inactive{border-color:#cfe0fb;background:#f4f8ff;colo
 button.admin-status-toggle.inactive:hover{background:#e8f1ff;border-color:var(--choping-blue)}
 button.admin-status-toggle:disabled{opacity:.6;cursor:default}
 .admin-user-row .admin-status-toggle{margin-left:8px}
+
+/* --- Cuenta de acceso en el panel de tienda --------------------------- */
+.password-ok{margin:0;color:#1b7f4d;font-size:13px;font-weight:600}
+.store-account-card{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px;border:1px solid var(--choping-border);border-radius:var(--radius-md);background:var(--choping-white)}
+.store-account-avatar{display:grid;place-items:center;flex:0 0 46px;height:46px;border-radius:50%;background:#e8f9ff;color:var(--choping-blue);font-size:19px;font-weight:800}
+.store-account-info{flex:1;min-width:180px;display:grid;gap:2px}
+.store-account-info strong{font-size:15px;color:var(--choping-dark)}
+.store-account-info small{color:var(--choping-muted);font-size:13px;overflow-wrap:anywhere}
+.store-account-role{font-size:12px;color:var(--choping-muted)}
+.store-account-card .btn{padding:10px 16px;font-size:13px}
+.store-edit-grid label>input:disabled{background:#f4f7fc;color:var(--choping-muted);cursor:not-allowed}

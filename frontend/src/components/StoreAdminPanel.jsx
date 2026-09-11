@@ -2,8 +2,31 @@ import React, { useState } from "react";
 import { API, money, productImageUrl } from "../lib/api";
 import { configuredCategories } from "../lib/catalog";
 import { StoreThemeStudio } from "./StoreThemeStudio";
+import { PasswordModal } from "./PasswordModal";
 
-function StoreAdminPanel({ store, theme, setTheme, media, setMedia, createProduct, viewStore, close }) {
+function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, createProduct, updateStore, viewStore, close }) {
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({
+    category: store?.category || "",
+    city: store?.city || "",
+    description: store?.description || "",
+  });
+  const [profileMessage, setProfileMessage] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const saveProfile = async (event) => {
+    event.preventDefault();
+    setProfileMessage("");
+    setProfileError("");
+    setSavingProfile(true);
+    try {
+      await updateStore(profileDraft);
+      setProfileMessage("Información actualizada.");
+    } catch (error) {
+      setProfileError(error.message || "No fue posible guardar la información.");
+    }
+    setSavingProfile(false);
+  };
   const [tab, setTab] = useState("home");
   const [addingProduct, setAddingProduct] = useState(false);
   const [productDraft, setProductDraft] = useState({ name: "", category: store?.category || configuredCategories()[0], price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
@@ -118,8 +141,74 @@ function StoreAdminPanel({ store, theme, setTheme, media, setMedia, createProduc
             </div>
           )}
           {tab === "clients" && <div className="store-admin-content"><h2>Clientes de {store?.name}</h2><p>Clientes vinculados a esta tienda. Los datos de contacto se muestran protegidos.</p><div className="store-admin-list">{registeredClients.length ? registeredClients.map((client) => <div className="store-client-row" key={client.email}><span className="store-client-avatar">{(client.name || client.email).slice(0, 1).toUpperCase()}</span><div><strong>{client.name || "Cliente"}</strong><small>{maskedEmail(client.email)}</small></div><span>{maskedPhone(client.phone)}</span></div>) : <div className="store-admin-empty"><strong>Aún no hay clientes vinculados</strong><span>Los clientes asociados a esta tienda aparecerán aquí.</span></div>}</div></div>}
-          {tab === "store" && <div className="store-admin-content"><h2>Información de mi tienda</h2><p>Consulta y actualiza la información visible para tus clientes.</p><div className="store-edit-grid"><label>Nombre de la tienda<input defaultValue={store?.name || ""} /></label><label>Categoría<input defaultValue={store?.category || ""} /></label><label>Ciudad<input defaultValue={store?.city || ""} /></label><label>Descripción<textarea defaultValue={store?.description || ""} /></label></div><button className="btn">Guardar información</button></div>}
+          {tab === "store" && (
+            <div className="store-admin-content">
+              <h2>Información de mi tienda</h2>
+              <p>Consulta y actualiza la información visible para tus clientes.</p>
+              <form className="store-edit-grid" onSubmit={saveProfile}>
+                <label>
+                  Nombre de la tienda
+                  {/* El nombre identifica la tienda en el catalogo, el tema y
+                      las imagenes: cambiarlo aqui las dejaria huerfanas. */}
+                  <input value={store?.name || ""} readOnly disabled />
+                  <small className="form-hint">Para cambiar el nombre, escribe al administrador.</small>
+                </label>
+                <label>
+                  Categoría
+                  <select
+                    value={profileDraft.category}
+                    onChange={(event) => setProfileDraft({ ...profileDraft, category: event.target.value })}
+                    required
+                  >
+                    <option value="">Selecciona una categoría</option>
+                    {[...new Set([...configuredCategories(), store?.category].filter(Boolean))].map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Ciudad
+                  <input
+                    value={profileDraft.city}
+                    onChange={(event) => setProfileDraft({ ...profileDraft, city: event.target.value })}
+                    required
+                  />
+                </label>
+                <label>
+                  Descripción
+                  <textarea
+                    value={profileDraft.description}
+                    onChange={(event) => setProfileDraft({ ...profileDraft, description: event.target.value })}
+                    maxLength={600}
+                  />
+                </label>
+                {profileError && <p className="store-media-error">{profileError}</p>}
+                {profileMessage && <p className="password-ok">{profileMessage}</p>}
+                <button className="btn" disabled={savingProfile}>
+                  {savingProfile ? "Guardando…" : "Guardar información"}
+                </button>
+              </form>
+
+              <h3>Cuenta de acceso</h3>
+              <div className="store-account-card">
+                <span className="store-account-avatar">
+                  {(user?.name || user?.email || "T").slice(0, 1).toUpperCase()}
+                </span>
+                <div className="store-account-info">
+                  <strong>{user?.name || "Sin nombre"}</strong>
+                  <small>{user?.email || "Sin correo"}</small>
+                  <span className="store-account-role">Administrador de {store?.name}</span>
+                </div>
+                <button type="button" className="btn" onClick={() => setPasswordOpen(true)}>
+                  Cambiar contraseña
+                </button>
+              </div>
+            </div>
+          )}
           {tab === "settings" && <StoreThemeStudio store={store} theme={theme} setTheme={setTheme} media={media} setMedia={setMedia} />}
+          {passwordOpen && <PasswordModal close={() => setPasswordOpen(false)} />}
         </div>
       </section>
     </div>

@@ -266,6 +266,23 @@ function App() {
     );
     return product;
   };
+  const updateStoreProfile = async (draft) => {
+    const authToken = localStorage.getItem("choping-auth-token");
+    if (!authToken) throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
+    const response = await fetch(`${API}/api/store/profile`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ store: store?.name, ...draft }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "No fue posible guardar la información.");
+    const saved = data.store;
+    setStores((current) =>
+      current.map((item) => (item.name === saved.name ? { ...item, ...saved } : item)),
+    );
+    setStore((current) => (current?.name === saved.name ? { ...current, ...saved } : current));
+    return saved;
+  };
   /** Apply the palette locally at once; persist it after the picker settles. */
   const saveStoreTheme = (value, { onStatus } = {}) => {
     if (!store?.name) return;
@@ -621,6 +638,8 @@ function App() {
       {storeAdminOpen && (
         <StoreAdminPanel
           store={store}
+          user={user}
+          updateStore={updateStoreProfile}
           theme={normalizeTheme(storeThemes[store.name])}
           media={store?.media || { logo: "", banners: [] }}
           setMedia={(media) => {
