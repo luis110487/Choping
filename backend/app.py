@@ -73,17 +73,55 @@ class StoreTheme(db.Model):
     store_name = db.Column(db.String(120), nullable=False, unique=True, index=True)
     preset = db.Column(db.String(32), nullable=False, default='ocean')
     colors = db.Column(db.Text, nullable=False, default='{}')
+    fonts = db.Column(db.Text, nullable=False, default='{}')
+    media = db.Column(db.Text, nullable=False, default='{}')
+
+    @staticmethod
+    def _load(raw):
+        try:
+            value = json.loads(raw or '{}')
+        except ValueError:
+            return {}
+        return value if isinstance(value, dict) else {}
 
     def as_dict(self):
+        return {'preset': self.preset, 'colors': self._load(self.colors), 'fonts': self._load(self.fonts)}
+
+    def media_dict(self):
+        media = self._load(self.media)
+        banners = media.get('banners')
+        return {
+            'logo': media.get('logo') or '',
+            'banners': [url for url in banners if isinstance(url, str)] if isinstance(banners, list) else [],
+        }
+
+def ensure_store_theme_schema():
+    """Add columns introduced after the table already shipped.
+
+    create_all() only creates missing tables, so an existing deployment keeps
+    its old shape until the column is added explicitly.
+    """
+    try:
+        columns = {column['name'] for column in db.inspect(db.engine).get_columns('store_theme')}
+    except Exception:
+        return
+    for column in ('fonts', 'media'):
+        if column in columns:
+            continue
         try:
-            colors = json.loads(self.colors or '{}')
-        except ValueError:
-            colors = {}
-        return {'preset': self.preset, 'colors': colors if isinstance(colors, dict) else {}}
+            db.session.execute(text(f"alter table store_theme add column {column} text not null default '{{}}'"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 STORE_THEME_PRESETS = {'ocean', 'sunset', 'forest', 'mono'}
 STORE_THEME_COLOR_KEYS = {'background', 'surface', 'heading', 'accent', 'price', 'priceOld', 'icon'}
-DEFAULT_STORE_THEME = {'preset': 'ocean', 'colors': {}}
+STORE_THEME_FONT_SLOTS = {'heading', 'body'}
+# Whitelisted so a store can never inject arbitrary CSS through the font name.
+STORE_THEME_FONTS = {'sistema', 'moderna', 'editorial', 'amable', 'legible', 'tecnica'}
+DEFAULT_STORE_THEME = {'preset': 'ocean', 'colors': {}, 'fonts': {}}
+DEFAULT_STORE_MEDIA = {'logo': '', 'banners': []}
+MAX_STORE_BANNERS = 5
 HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
 
 def parse_store_theme(payload):
@@ -103,20 +141,33 @@ def parse_store_theme(payload):
         if not isinstance(value, str) or not HEX_COLOR.match(value.strip()):
             return None, f'El color de "{key}" debe estar en formato #rrggbb.'
         colors[key] = value.strip().lower()
-    return {'preset': preset, 'colors': colors}, None
+    raw_fonts = payload.get('fonts') or {}
+    if not isinstance(raw_fonts, dict):
+        return None, 'Las tipografias enviadas no son validas.'
+    fonts = {}
+    for slot, value in raw_fonts.items():
+        if slot not in STORE_THEME_FONT_SLOTS:
+            return None, f'La tipografia "{slot}" no se puede personalizar.'
+        name = str(value or '').strip().lower()
+        if name not in STORE_THEME_FONTS:
+            return None, f'La tipografia "{value}" no esta disponible.'
+        fonts[slot] = name
+    return {'preset': preset, 'colors': colors, 'fonts': fonts}, None
 
 def store_themes_by_name():
     try:
-        return {row.store_name.lower(): row.as_dict() for row in StoreTheme.query.all()}
+        return {row.store_name.lower(): (row.as_dict(), row.media_dict()) for row in StoreTheme.query.all()}
     except Exception:
         db.session.rollback()
         return {}
 
 def apply_store_themes(catalog):
-    """Attach each store's saved palette, falling back to the default preset."""
-    themes = store_themes_by_name()
+    """Attach each store's saved palette and media, falling back to defaults."""
+    saved = store_themes_by_name()
     for store in catalog:
-        store['theme'] = themes.get((store.get('name') or '').lower(), DEFAULT_STORE_THEME)
+        theme, media = saved.get((store.get('name') or '').lower(), (DEFAULT_STORE_THEME, DEFAULT_STORE_MEDIA))
+        store['theme'] = theme
+        store['media'] = media
     return catalog
 
 DEMO_PRODUCTS = [
@@ -321,36 +372,173 @@ def create_catalog_product(store_name, data):
         db.session.rollback()
         return None, 'No fue posible guardar el producto.'
 
+STORE_MEDIA_BUCKET = os.environ.get('SUPABASE_STORAGE_BUCKET', 'store-media').strip() or 'store-media'
+IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
+
+def validate_image_upload(uploaded):
+    if not uploaded or not uploaded.filename:
+        return None, 'Selecciona una imagen para cargar.'
+    extension = uploaded.filename.rsplit('.', 1)[-1].lower() if '.' in uploaded.filename else ''
+    if extension not in IMAGE_EXTENSIONS or not (uploaded.mimetype or '').startswith('image/'):
+        return None, 'Usa una imagen PNG, JPG, WEBP o GIF.'
+    if not secure_filename(uploaded.filename):
+        return None, 'El nombre del archivo no es valido.'
+    return extension, None
+
+def supabase_storage_request(method, path, data=None, headers=None):
+    supabase_url = os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
+    service_key = supabase_service_key()
+    if not supabase_url or not service_key:
+        return None, 'storage-not-configured'
+    storage_request = Request(
+        f'{supabase_url}/storage/v1/{path}',
+        data=data,
+        headers={'Authorization': f'Bearer {service_key}', **(headers or {})},
+        method=method,
+    )
+    try:
+        with urlopen(storage_request, timeout=20) as response:
+            return response.read(), None
+    except HTTPError as error:
+        return None, f'{error.code}: {error.read()[:200].decode("utf-8", "replace")}'
+    except (URLError, TimeoutError) as error:
+        return None, str(error)
+
+def ensure_media_bucket():
+    """Create the public bucket on first use so a fresh project just works."""
+    payload = json.dumps({'name': STORE_MEDIA_BUCKET, 'id': STORE_MEDIA_BUCKET, 'public': True}).encode('utf-8')
+    _, error = supabase_storage_request('POST', 'bucket', payload, {'Content-Type': 'application/json'})
+    # A 409 means the bucket already exists, which is the normal case.
+    return error is None or '409' in (error or '')
+
+def upload_store_media(store_name, uploaded, extension):
+    """Store the image in Supabase Storage, or on local disk during development."""
+    key = f'{secure_filename(store_name) or "tienda"}/{uuid4().hex}.{extension}'
+    supabase_url = os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
+    if supabase_url and supabase_service_key():
+        ensure_media_bucket()
+        _, error = supabase_storage_request(
+            'POST',
+            f'object/{STORE_MEDIA_BUCKET}/{key}',
+            uploaded.read(),
+            {'Content-Type': uploaded.mimetype or 'image/png', 'x-upsert': 'true'},
+        )
+        if error:
+            return None, 'No fue posible cargar la imagen en el almacenamiento.'
+        return f'{supabase_url}/storage/v1/object/public/{STORE_MEDIA_BUCKET}/{key}', None
+    try:
+        folder = os.path.join(app.config['PRODUCT_UPLOAD_FOLDER'], 'stores')
+        os.makedirs(folder, exist_ok=True)
+        local_name = key.replace('/', '_')
+        uploaded.save(os.path.join(folder, local_name))
+    except OSError:
+        return None, 'No fue posible cargar la imagen. Intenta nuevamente.'
+    return f'uploads/stores/{local_name}', None
+
+def delete_store_media(url):
+    marker = f'/storage/v1/object/public/{STORE_MEDIA_BUCKET}/'
+    if marker not in (url or ''):
+        return
+    supabase_storage_request('DELETE', f'object/{STORE_MEDIA_BUCKET}/{url.split(marker, 1)[1]}')
+
+def store_for_actor(actor, requested_store):
+    """Resolve which store the caller may edit, returning (name, error, status)."""
+    if not actor:
+        return None, 'Inicia sesion para personalizar la tienda.', 401
+    requested = (requested_store or '').strip()
+    if actor.get('role') == 'tienda':
+        own = (actor.get('store_name') or '').strip()
+        if not own:
+            return None, 'Tu cuenta no tiene una tienda asignada.', 403
+        if requested and requested.lower() != own.lower():
+            return None, 'Solo puedes personalizar tu propia tienda.', 403
+        return own, None, 200
+    if actor.get('role') in {'admin', 'superadmin'}:
+        if not requested:
+            return None, 'Indica la tienda que quieres personalizar.', 400
+        return requested, None, 200
+    return None, 'No tienes permisos para personalizar tiendas.', 403
+
+def store_theme_record(store_name):
+    record = StoreTheme.query.filter(db.func.lower(StoreTheme.store_name) == store_name.lower()).first()
+    if not record:
+        record = StoreTheme(store_name=store_name)
+        db.session.add(record)
+    return record
+
+@app.post('/api/store/media')
+def upload_store_media_endpoint():
+    store_name, error, status = store_for_actor(authenticated_session(), request.form.get('store'))
+    if error:
+        return jsonify({'error': error}), status
+    slot = (request.form.get('slot') or 'banner').strip().lower()
+    if slot not in {'logo', 'banner'}:
+        return jsonify({'error': 'El destino de la imagen no es valido.'}), 400
+    extension, error = validate_image_upload(request.files.get('image'))
+    if error:
+        return jsonify({'error': error}), 400
+    record = store_theme_record(store_name)
+    media = record.media_dict()
+    if slot == 'banner' and len(media['banners']) >= MAX_STORE_BANNERS:
+        return jsonify({'error': f'Puedes tener hasta {MAX_STORE_BANNERS} banners.'}), 400
+    url, error = upload_store_media(store_name, request.files['image'], extension)
+    if error:
+        return jsonify({'error': error}), 502
+    previous_logo = media['logo']
+    if slot == 'logo':
+        media['logo'] = url
+    else:
+        media['banners'].append(url)
+    try:
+        record.media = json.dumps(media)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible guardar la imagen.'}), 500
+    if slot == 'logo' and previous_logo:
+        delete_store_media(previous_logo)
+    return jsonify({'store': store_name, 'media': media}), 201
+
+@app.delete('/api/store/media')
+def delete_store_media_endpoint():
+    data = request.get_json(silent=True) or {}
+    store_name, error, status = store_for_actor(authenticated_session(), data.get('store'))
+    if error:
+        return jsonify({'error': error}), status
+    target = (data.get('url') or '').strip()
+    if not target:
+        return jsonify({'error': 'Indica la imagen que quieres eliminar.'}), 400
+    record = store_theme_record(store_name)
+    media = record.media_dict()
+    if target == media['logo']:
+        media['logo'] = ''
+    elif target in media['banners']:
+        media['banners'] = [url for url in media['banners'] if url != target]
+    else:
+        return jsonify({'error': 'Esa imagen no pertenece a tu tienda.'}), 404
+    try:
+        record.media = json.dumps(media)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible eliminar la imagen.'}), 500
+    delete_store_media(target)
+    return jsonify({'store': store_name, 'media': media})
+
 @app.put('/api/store/theme')
 def save_store_theme():
-    actor = authenticated_session()
-    if not actor:
-        return jsonify({'error': 'Inicia sesion para personalizar la tienda.'}), 401
     data = request.get_json(silent=True) or {}
-    requested_store = (data.get('store') or '').strip()
-    if actor.get('role') == 'tienda':
-        store_name = (actor.get('store_name') or '').strip()
-        if not store_name:
-            return jsonify({'error': 'Tu cuenta no tiene una tienda asignada.'}), 403
-        if requested_store and requested_store.lower() != store_name.lower():
-            return jsonify({'error': 'Solo puedes personalizar tu propia tienda.'}), 403
-    elif actor.get('role') in {'admin', 'superadmin'}:
-        store_name = requested_store
-        if not store_name:
-            return jsonify({'error': 'Indica la tienda que quieres personalizar.'}), 400
-    else:
-        return jsonify({'error': 'No tienes permisos para personalizar tiendas.'}), 403
-
+    store_name, error, status = store_for_actor(authenticated_session(), data.get('store'))
+    if error:
+        return jsonify({'error': error}), status
     theme, error = parse_store_theme(data.get('theme') if isinstance(data.get('theme'), dict) else data)
     if error:
         return jsonify({'error': error}), 400
     try:
-        record = StoreTheme.query.filter(db.func.lower(StoreTheme.store_name) == store_name.lower()).first()
-        if not record:
-            record = StoreTheme(store_name=store_name)
-            db.session.add(record)
+        record = store_theme_record(store_name)
         record.preset = theme['preset']
         record.colors = json.dumps(theme['colors'])
+        record.fonts = json.dumps(theme['fonts'])
         db.session.commit()
     except Exception:
         db.session.rollback()
@@ -841,6 +1029,7 @@ def register():
 
 with app.app_context():
     db.create_all()
+    ensure_store_theme_schema()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

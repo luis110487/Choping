@@ -26,13 +26,32 @@ const STORE_COLOR_FIELDS = [
   { key: "priceOld", label: "Precio tachado", hint: "Precio anterior en ofertas" },
   { key: "icon", label: "Iconos y etiquetas", hint: "Estrellas y sello de oferta" },
 ];
+const STORE_FONTS = [
+  { id: "sistema", name: "Sistema", detail: "Neutra y rapida", stack: "system-ui, 'Segoe UI', Roboto, sans-serif" },
+  { id: "moderna", name: "Moderna", detail: "Geometrica y actual", stack: "'Trebuchet MS', 'Segoe UI', sans-serif" },
+  { id: "editorial", name: "Editorial", detail: "Serif con caracter", stack: "Georgia, 'Times New Roman', serif" },
+  { id: "amable", name: "Amable", detail: "Redonda y cercana", stack: "'Comic Sans MS', 'Segoe UI', sans-serif" },
+  { id: "legible", name: "Legible", detail: "Amplia y clara", stack: "Verdana, Geneva, sans-serif" },
+  { id: "tecnica", name: "Tecnica", detail: "Monoespaciada", stack: "ui-monospace, Consolas, 'Courier New', monospace" },
+];
+const STORE_FONT_SLOTS = [
+  { key: "heading", label: "Titulos", hint: "Nombre de la tienda y de los productos" },
+  { key: "body", label: "Textos", hint: "Descripciones, precios y botones" },
+];
+const DEFAULT_FONTS = { heading: "sistema", body: "sistema" };
+const fontStack = (id) => (STORE_FONTS.find((item) => item.id === id) || STORE_FONTS[0]).stack;
 const DEFAULT_PRESET = "ocean";
 
 /** Accept both the legacy string theme and the richer customizable object. */
 function normalizeTheme(value) {
-  if (typeof value === "string") return { preset: value || DEFAULT_PRESET, colors: {} };
-  if (!value || typeof value !== "object") return { preset: DEFAULT_PRESET, colors: {} };
-  return { preset: value.preset || DEFAULT_PRESET, colors: value.colors || {} };
+  if (typeof value === "string") return { preset: value || DEFAULT_PRESET, colors: {}, fonts: {} };
+  if (!value || typeof value !== "object") return { preset: DEFAULT_PRESET, colors: {}, fonts: {} };
+  return { preset: value.preset || DEFAULT_PRESET, colors: value.colors || {}, fonts: value.fonts || {} };
+}
+
+/** Effective typography: the platform default with the owner's choices on top. */
+function themeFonts(value) {
+  return { ...DEFAULT_FONTS, ...normalizeTheme(value).fonts };
 }
 
 function presetPalette(preset) {
@@ -57,6 +76,9 @@ function themeStyleVars(value) {
     const color = theme.colors[key];
     if (color) vars[`--store-${key === "priceOld" ? "price-old" : key}`] = color;
   }
+  const fonts = themeFonts(value);
+  vars["--store-font-heading"] = fontStack(fonts.heading);
+  vars["--store-font-body"] = fontStack(fonts.body);
   return vars;
 }
 
@@ -437,6 +459,7 @@ function App() {
       <section className="banner-section" aria-label="Banners destacados">
         <BannerSlider
           storeName={store?.name}
+          storeBanners={store?.media?.banners}
           banner={banner}
           setBanner={(value) => {
             setBanner(value);
@@ -601,6 +624,11 @@ function App() {
         <StoreAdminPanel
           store={store}
           theme={normalizeTheme(storeThemes[store.name])}
+          media={store?.media || { logo: "", banners: [] }}
+          setMedia={(media) => {
+            setStores((current) => current.map((item) => (item.name === store.name ? { ...item, media } : item)));
+            setStore((current) => (current?.name === store.name ? { ...current, media } : current));
+          }}
           createProduct={createStoreProduct}
           setTheme={saveStoreTheme}
           viewStore={() => {
@@ -802,7 +830,7 @@ function CartModal({ cart, setCart, setPurchased, total, close }) {
     </div>
   );
 }
-function BannerSlider({ storeName, banner, setBanner, storageKey = "choping-home-banners" }) {
+function BannerSlider({ storeName, banner, setBanner, storeBanners, storageKey = "choping-home-banners" }) {
   const defaultImages =
     storeName === "EcoRuedas"
       ? [
@@ -823,9 +851,12 @@ function BannerSlider({ storeName, banner, setBanner, storageKey = "choping-home
               "/techzone-banner.png",
             ]
           : ["/banner-home-1.png", "/banner-home-2.png", "/banner-home-3.png"];
-  const images = storeName
-    ? defaultImages
-    : JSON.parse(localStorage.getItem(storageKey) || "null") || defaultImages;
+  const uploaded = (storeBanners || []).map(storeMediaUrl).filter(Boolean);
+  const images = uploaded.length
+    ? uploaded
+    : storeName
+      ? defaultImages
+      : JSON.parse(localStorage.getItem(storageKey) || "null") || defaultImages;
   useEffect(() => {
     const timer = setInterval(
       () => setBanner((banner + 1) % images.length),
@@ -837,18 +868,18 @@ function BannerSlider({ storeName, banner, setBanner, storageKey = "choping-home
     <section className={`banner-slider ${storeName ? "store-banner" : "home-banner"}`}>
       <img
         className="banner-image"
-        src={images[banner]}
+        src={images[banner % images.length]}
         alt={`Banner ${banner + 1}`}
       />
       <button
         className="banner-control previous"
-        onClick={() => setBanner((banner + 2) % 3)}
+        onClick={() => setBanner((banner + images.length - 1) % images.length)}
       >
         ‹
       </button>
       <button
         className="banner-control next"
-        onClick={() => setBanner((banner + 1) % 3)}
+        onClick={() => setBanner((banner + 1) % images.length)}
       >
         ›
       </button>
@@ -1272,7 +1303,114 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     </div>
   );
 }
-function StoreThemeStudio({ store, theme, setTheme }) {
+const storeMediaUrl = (value) =>
+  !value ? "" : /^(https?:)?\/\//i.test(value) ? value : `${API}/static/img/${value}`;
+
+function StoreMediaManager({ store, media, setMedia }) {
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const banners = media?.banners || [];
+  const logo = media?.logo || "";
+
+  const send = async (slot, file) => {
+    if (!file) return;
+    setBusy(slot);
+    setError("");
+    const authToken = localStorage.getItem("choping-auth-token");
+    if (!authToken) {
+      setBusy("");
+      return setError("Tu sesión expiró. Inicia sesión nuevamente.");
+    }
+    const body = new FormData();
+    body.append("image", file);
+    body.append("slot", slot);
+    body.append("store", store?.name || "");
+    try {
+      const response = await fetch(`${API}/api/store/media`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}` },
+        body,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) setError(data.error || "No fue posible cargar la imagen.");
+      else setMedia(data.media);
+    } catch {
+      setError("No fue posible conectar con el servidor.");
+    }
+    setBusy("");
+  };
+
+  const remove = async (url) => {
+    setBusy(url);
+    setError("");
+    const authToken = localStorage.getItem("choping-auth-token");
+    try {
+      const response = await fetch(`${API}/api/store/media`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ store: store?.name || "", url }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) setError(data.error || "No fue posible eliminar la imagen.");
+      else setMedia(data.media);
+    } catch {
+      setError("No fue posible conectar con el servidor.");
+    }
+    setBusy("");
+  };
+
+  return (
+    <div className="store-media">
+      {error && <p className="store-media-error">{error}</p>}
+      <div className="store-media-block">
+        <div className="store-media-head">
+          <strong>Logo de la tienda</strong>
+          <small>Se muestra en tu perfil. Recomendado cuadrado y con fondo transparente.</small>
+        </div>
+        <div className="store-media-logo">
+          {logo ? (
+            <>
+              <img src={storeMediaUrl(logo)} alt="Logo de la tienda" />
+              <button type="button" className="nav-link" disabled={busy === logo} onClick={() => remove(logo)}>
+                Quitar
+              </button>
+            </>
+          ) : (
+            <span className="store-media-empty">Sin logo</span>
+          )}
+          <label className="btn store-media-upload">
+            {busy === "logo" ? "Cargando…" : logo ? "Reemplazar" : "Subir logo"}
+            <input type="file" accept="image/*" disabled={busy === "logo"} onChange={(event) => { send("logo", event.target.files?.[0]); event.target.value = ""; }} />
+          </label>
+        </div>
+      </div>
+      <div className="store-media-block">
+        <div className="store-media-head">
+          <strong>Banners</strong>
+          <small>Hasta 5, rotan automáticamente en tu tienda. Formato ancho, 1600×500 aprox.</small>
+        </div>
+        <div className="store-media-banners">
+          {banners.map((url) => (
+            <figure key={url}>
+              <img src={storeMediaUrl(url)} alt="Banner de la tienda" />
+              <button type="button" className="store-media-remove" disabled={busy === url} onClick={() => remove(url)} title="Eliminar banner">
+                ×
+              </button>
+            </figure>
+          ))}
+          {banners.length < 5 && (
+            <label className="store-media-add">
+              {busy === "banner" ? "Cargando…" : "+ Agregar banner"}
+              <input type="file" accept="image/*" disabled={busy === "banner"} onChange={(event) => { send("banner", event.target.files?.[0]); event.target.value = ""; }} />
+            </label>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StoreThemeStudio({ store, theme, setTheme, media, setMedia }) {
   const [status, setStatus] = useState("");
   const [statusError, setStatusError] = useState("");
   const onStatus = (next, message = "") => {
@@ -1281,6 +1419,7 @@ function StoreThemeStudio({ store, theme, setTheme }) {
   };
   const save = (value) => setTheme(value, { onStatus });
   const palette = themePalette(theme);
+  const fonts = themeFonts(theme);
   const overrides = normalizeTheme(theme).colors;
   const sample = (store?.products || [])[0];
   const previewProduct = {
@@ -1290,15 +1429,16 @@ function StoreThemeStudio({ store, theme, setTheme }) {
     original_price: Number(sample?.original_price) || Number(sample?.price) * 1.25 || 249000,
     image: sample?.image,
   };
-  const applyPreset = (preset) => save({ preset, colors: {} });
-  const setColor = (key, color) =>
-    save({ preset: normalizeTheme(theme).preset, colors: { ...overrides, [key]: color } });
+  const current = normalizeTheme(theme);
+  const applyPreset = (preset) => save({ ...current, preset, colors: {} });
+  const setColor = (key, color) => save({ ...current, colors: { ...overrides, [key]: color } });
   const resetColor = (key) => {
     const next = { ...overrides };
     delete next[key];
-    save({ preset: normalizeTheme(theme).preset, colors: next });
+    save({ ...current, colors: next });
   };
-  const resetAll = () => save({ preset: normalizeTheme(theme).preset, colors: {} });
+  const resetAll = () => save({ ...current, colors: {} });
+  const setFont = (slot, id) => save({ ...current, fonts: { ...fonts, [slot]: id } });
   return (
     <div className="store-admin-content theme-studio">
       <small>PERSONALIZACIÓN</small>
@@ -1360,14 +1500,14 @@ function StoreThemeStudio({ store, theme, setTheme }) {
           <span className="theme-preview-label" style={{ color: palette.heading }}>
             Vista previa en vivo
           </span>
-          <article className="product-card theme-preview-card" style={{ background: palette.surface, borderColor: palette.accent }}>
+          <article className="product-card theme-preview-card" style={{ background: palette.surface, borderColor: palette.accent, fontFamily: fontStack(fonts.body) }}>
             <div className="product-photo">
               <img src={productImageUrl(previewProduct.image)} alt={previewProduct.name} />
               <span className="product-sale-badge" style={{ background: palette.icon }}>Oferta</span>
             </div>
             <div className="product-info">
               <small>{previewProduct.category}</small>
-              <h2 style={{ color: palette.heading }}>{previewProduct.name}</h2>
+              <h2 style={{ color: palette.heading, fontFamily: fontStack(fonts.heading) }}>{previewProduct.name}</h2>
               <span className="stars" style={{ color: palette.icon }}>★★★★★</span>
               <div className="product-price-stack">
                 <del style={{ color: palette.priceOld }}>{money(previewProduct.original_price)}</del>
@@ -1378,15 +1518,37 @@ function StoreThemeStudio({ store, theme, setTheme }) {
           </article>
         </aside>
       </div>
+      <h3>Tipografía</h3>
+      <div className="theme-font-grid">
+        {STORE_FONT_SLOTS.map((slot) => (
+          <div className="theme-font-slot" key={slot.key}>
+            <strong>{slot.label}</strong>
+            <small>{slot.hint}</small>
+            <div className="theme-font-options">
+              {STORE_FONTS.map((font) => (
+                <button
+                  key={font.id}
+                  className={`theme-font-option ${fonts[slot.key] === font.id ? "selected" : ""}`}
+                  style={{ fontFamily: font.stack }}
+                  onClick={() => setFont(slot.key, font.id)}
+                >
+                  <span className="theme-font-sample">Aa</span>
+                  <span className="theme-font-name">{font.name}</span>
+                  <small>{font.detail}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
       <h3>Contenido de la tienda</h3>
-      <label>Logo de la tienda<input type="file" accept="image/*" /></label>
-      <label>Banners superiores (hasta 3)<input type="file" accept="image/*" multiple /></label>
+      <StoreMediaManager store={store} media={media} setMedia={setMedia} />
       <p className="form-hint">Los cambios visuales se aplican inmediatamente a tu perfil.</p>
     </div>
   );
 }
 
-function StoreAdminPanel({ store, theme, setTheme, createProduct, viewStore, close }) {
+function StoreAdminPanel({ store, theme, setTheme, media, setMedia, createProduct, viewStore, close }) {
   const [tab, setTab] = useState("home");
   const [addingProduct, setAddingProduct] = useState(false);
   const [productDraft, setProductDraft] = useState({ name: "", category: store?.category || configuredCategories()[0], price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
@@ -1502,7 +1664,7 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, viewStore, clo
           )}
           {tab === "clients" && <div className="store-admin-content"><h2>Clientes de {store?.name}</h2><p>Clientes vinculados a esta tienda. Los datos de contacto se muestran protegidos.</p><div className="store-admin-list">{registeredClients.length ? registeredClients.map((client) => <div className="store-client-row" key={client.email}><span className="store-client-avatar">{(client.name || client.email).slice(0, 1).toUpperCase()}</span><div><strong>{client.name || "Cliente"}</strong><small>{maskedEmail(client.email)}</small></div><span>{maskedPhone(client.phone)}</span></div>) : <div className="store-admin-empty"><strong>Aún no hay clientes vinculados</strong><span>Los clientes asociados a esta tienda aparecerán aquí.</span></div>}</div></div>}
           {tab === "store" && <div className="store-admin-content"><h2>Información de mi tienda</h2><p>Consulta y actualiza la información visible para tus clientes.</p><div className="store-edit-grid"><label>Nombre de la tienda<input defaultValue={store?.name || ""} /></label><label>Categoría<input defaultValue={store?.category || ""} /></label><label>Ciudad<input defaultValue={store?.city || ""} /></label><label>Descripción<textarea defaultValue={store?.description || ""} /></label></div><button className="btn">Guardar información</button></div>}
-          {tab === "settings" && <StoreThemeStudio store={store} theme={theme} setTheme={setTheme} />}
+          {tab === "settings" && <StoreThemeStudio store={store} theme={theme} setTheme={setTheme} media={media} setMedia={setMedia} />}
         </div>
       </section>
     </div>

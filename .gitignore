@@ -9,3 +9,4 @@ frontend/node_modules/
 frontend/dist/
 encuentra_mvp_800k/.git/
 encuentra_mvp_800k/__pycache__/
+backend/static/img/uploads/

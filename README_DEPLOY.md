@@ -41,3 +41,11 @@ npm run dev
 ```
 
 La app Flask original continúa en `encuentra_mvp_800k` como referencia y respaldo durante la migración.
+
+## Imagenes de tienda
+
+Logo y banners se guardan en Supabase Storage, en el bucket `store-media`,
+que la API crea sola la primera vez si no existe. Para cambiarlo, define
+`SUPABASE_STORAGE_BUCKET`. Sin `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`
+la API cae a disco local, valido solo en desarrollo: Render borra el disco
+en cada despliegue.
