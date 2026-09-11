@@ -320,3 +320,117 @@ header{padding:0;background:var(--choping-white);border-bottom:1px solid var(--c
   .header-search input{padding:10px 12px}
   .header-search button[type="submit"]{padding:10px 16px}
 }
+
+/* =========================================================
+   VISTA DE TIENDA - mismo sistema que el directorio
+   Los colores siguen saliendo de --store-*, que es lo que
+   elige cada duena en el estudio de personalizacion.
+   ========================================================= */
+
+/* --- Identidad de la tienda ------------------------------------------- */
+.store-identity{max-width:var(--shell);gap:18px;padding:30px 24px 10px}
+.store-identity-logo,.store-identity-mark{width:76px;height:76px;border-radius:var(--radius-lg);box-shadow:0 5px 20px rgba(28,65,110,.08)}
+.store-identity-logo{border:1px solid var(--choping-border);background:var(--choping-white);padding:8px}
+.store-identity-copy{gap:4px}
+.store-identity-copy h1{font-size:32px;line-height:1.15;font-weight:700;letter-spacing:-1px}
+.store-identity-copy p{font-size:15px;line-height:1.6;color:var(--choping-muted)}
+.store-identity .stars{font-size:16px}
+
+/* --- Rejilla de productos --------------------------------------------- */
+.store-profile .shop-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:22px;padding-left:24px;padding-right:24px;max-width:var(--shell)}
+.store-profile{padding-bottom:56px}
+
+/* --- Tarjeta de producto ---------------------------------------------- */
+.store-profile .product-card{border-radius:var(--radius-lg);box-shadow:0 5px 20px rgba(28,65,110,.06);overflow:hidden}
+.store-profile .product-card:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(28,65,110,.10)}
+.store-profile .product-photo{background:#f4f7fc}
+.store-profile .product-photo img{height:186px;min-height:186px;object-fit:contain;padding:14px;transition:transform .3s ease}
+.store-profile .product-card:hover .product-photo img{transform:scale(1.04)}
+.store-profile .product-info{padding:16px;gap:8px}
+.store-profile .product-info small{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--choping-muted)}
+.store-profile .product-info h2{font-size:15px;font-weight:600;line-height:1.4;letter-spacing:-.2px}
+.store-profile .product-info p{font-size:13px;line-height:1.5;color:var(--choping-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.store-profile .stars{font-size:13px}
+.store-profile .product-meta{align-items:flex-end;gap:10px;margin-top:2px}
+.store-profile .product-price-stack strong{font-size:18px;font-weight:800;letter-spacing:-.4px}
+.store-profile .product-price-stack del{font-size:12px;font-weight:500}
+.store-profile .stock-available,.store-profile .stock-out{font-size:11px;font-weight:600;padding:4px 8px;border-radius:6px}
+/* Con borde y no con fondo fijo: una tienda puede elegir un fondo que
+   coincida con el de la etiqueta y la haria desaparecer. */
+.store-profile .stock-available{background:transparent;border:1px solid currentColor;color:#1b7f4d}
+.store-profile .stock-out{background:transparent;border:1px solid currentColor;color:#c81e4a}
+.store-profile .btn.add-cart{border-radius:10px;padding:11px;font-weight:600;box-shadow:none;border:1px solid transparent}
+.store-profile .btn.add-cart:disabled{background:#eef2f9;color:#9aa8bd;cursor:not-allowed}
+.store-profile .product-sale-badge{border-radius:6px;padding:4px 8px;font-size:10px;font-weight:700}
+
+/* --- Vacio ------------------------------------------------------------- */
+.store-profile .empty-products{max-width:var(--shell);margin:0 auto;padding:40px 24px;color:var(--choping-muted);text-align:center}
+
+@media (max-width:1100px){.store-profile .shop-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:840px){
+  .store-profile .shop-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .store-identity-copy h1{font-size:26px}
+}
+@media (max-width:560px){
+  .store-profile .shop-grid{grid-template-columns:1fr;padding-left:16px;padding-right:16px}
+  .store-identity{padding:20px 16px 6px;gap:14px}
+  .store-identity-logo,.store-identity-mark{width:60px;height:60px}
+  .store-identity-copy h1{font-size:22px}
+}
+
+/* --- Modales dentro del sistema --------------------------------------- */
+.overlay{background:rgba(16,43,87,.55);backdrop-filter:blur(2px)}
+.cart-modal,.product-modal{border-radius:var(--radius-lg);background:var(--choping-white);box-shadow:0 28px 80px rgba(16,43,87,.32)}
+.cart-modal-content>small{font-size:12px;font-weight:800;letter-spacing:1.5px;color:var(--choping-blue);text-transform:uppercase}
+.cart-modal-content h2{font-size:26px;font-weight:700;letter-spacing:-.6px;color:var(--choping-dark)}
+.cart-modal-content h3{font-size:16px;font-weight:700;color:var(--choping-dark)}
+.cart-modal-content label{font-size:13px;font-weight:600;color:var(--choping-dark)}
+.cart-modal-content input,.cart-modal-content select,.cart-modal-content textarea{border:1px solid var(--choping-border);border-radius:10px;font-size:14px;color:var(--choping-text)}
+.cart-modal-content input:focus,.cart-modal-content select:focus,.cart-modal-content textarea:focus{border-color:var(--choping-blue);outline:none;box-shadow:0 0 0 3px rgba(7,94,232,.08)}
+.cart-modal-content .btn{border-radius:10px;font-weight:600;box-shadow:none}
+.modal-thumbnails{background:#f4f7fc;border-radius:0 0 var(--radius-lg) var(--radius-lg)}
+.modal-thumbnails button{border-radius:10px;border-width:2px;cursor:pointer}
+.modal-product-pricing strong{font-size:22px;font-weight:800;letter-spacing:-.4px;color:var(--store-price,var(--choping-dark))}
+.cart-modal-total strong{font-size:24px;font-weight:800;letter-spacing:-.5px;color:var(--choping-dark)}
+.modal-close{border-radius:50%}
+
+.modal-info{padding:26px}
+.modal-info>small{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--choping-muted)}
+.modal-info h2{font-size:24px;font-weight:700;letter-spacing:-.6px;color:var(--store-heading,var(--choping-dark))}
+.modal-info p{font-size:14px;line-height:1.6;color:var(--choping-muted)}
+.modal-gallery{background:#f4f7fc}
+.modal-buy .btn{border-radius:10px;font-weight:600;box-shadow:none}
+.quantity-control{border:1px solid var(--choping-border);border-radius:10px}
+.image-arrow{border-radius:50%}
+.modal-review{border-radius:var(--radius-md);background:#f7faff;border:1px solid var(--choping-border)}
+
+/* La galeria del modal tenia alto fijo de 280px mientras su contenido
+   (imagen, separacion y miniaturas) mide bastante mas, asi que las
+   miniaturas se desbordaban encima de la informacion del producto. */
+.modal-gallery{height:auto;min-height:0}
+.modal-gallery>img,.product-image-slider>img{max-height:min(46vh,330px)}
+
+/* El modal se monta dentro de .store-app, asi que las variables de la
+   tienda estan disponibles: que el detalle no rompa su identidad. */
+.modal-info h2{font-family:var(--store-font-heading)}
+.modal-buy .btn{background:var(--store-accent)}
+.modal-gallery .modal-thumbnails button.active{border-color:var(--store-accent)}
+.modal-info .stars{color:var(--store-icon)}
+
+/* --- Cabecera en una sola linea --------------------------------------- */
+/* Los bloques sumaban 1254px dentro de una barra de 1240, asi que el menu
+   caia a otra fila; como la barra esta limitada a 1240, ocurria en
+   cualquier pantalla. Nada envuelve: lo que sobra lo absorben el buscador
+   y los filtros, que se deslizan. */
+/* Desde 1000px: por debajo, el buscador no cabe en su ancho minimo y los
+   filtros se aplastaban a cero. Ahi la cabecera vuelve a envolver. */
+@media (min-width:1000px){
+  .nav{flex-wrap:nowrap;gap:14px}
+  .header-search{flex:1 1 300px;min-width:220px}
+  .store-category-filters{flex:0 1 auto;min-width:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .store-category-filters::-webkit-scrollbar{display:none}
+  .store-category-filters button{flex:0 0 auto}
+  .nav nav{flex:0 0 auto;flex-wrap:nowrap;gap:10px}
+  .nav nav .nav-link{white-space:nowrap}
+  .nav-cart{white-space:nowrap}
+}
