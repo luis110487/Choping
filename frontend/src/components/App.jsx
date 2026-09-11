@@ -10,6 +10,7 @@ import { BannerSlider } from "./BannerSlider";
 import { AdminBannerPanel } from "./AdminBannerPanel";
 import { StoreAdminPanel } from "./StoreAdminPanel";
 import { ClientProfile } from "./ClientProfile";
+import { ProfileMenu } from "./ProfileMenu";
 import { LoginModal } from "./LoginModal";
 
 function App() {
@@ -36,6 +37,8 @@ function App() {
     [adminOpen, setAdminOpen] = useState(false),
     [user, setUser] = useState(loadCurrentUser),
     [profileOpen, setProfileOpen] = useState(() => localStorage.getItem("choping-profile-open") === "true"),
+    [menuOpen, setMenuOpen] = useState(false),
+    [accountSection, setAccountSection] = useState(""),
     [storeAdminOpen, setStoreAdminOpen] = useState(false),
     themeSaveTimer = useRef(0),
     [platformTheme, setPlatformTheme] = useState(DEFAULT_PLATFORM_THEME),
@@ -186,6 +189,7 @@ function App() {
   const total = cart.reduce((s, p) => s + p.price * p.quantity, 0);
   const logout = () => {
     setUser(null);
+    setMenuOpen(false);
     localStorage.removeItem("choping-user");
     localStorage.removeItem("choping-auth-token");
     localStorage.removeItem("choping-profile-open");
@@ -194,6 +198,11 @@ function App() {
     setStoreAdminOpen(false);
   };
   const userInitial = (user?.name || user?.email || "U").slice(0, 1).toUpperCase();
+  const pendingReviewCount = (() => {
+    const reviews = JSON.parse(localStorage.getItem("choping-reviews") || "{}");
+    const dismissed = JSON.parse(localStorage.getItem("choping-dismissed-reviews") || "{}");
+    return purchased.filter((product) => !reviews[product.id] && !dismissed[`product-${product.id}`]).length;
+  })();
   const openStoreDashboard = () => {
     const assignedStore = stores.find(
       (item) => item.name.toLowerCase() === user?.store_name?.toLowerCase(),
@@ -326,17 +335,41 @@ function App() {
               </button>
             )}
             {user && (
-              <button
-                className="user-avatar-button"
-                onClick={() => {
-                  setProfileOpen(true);
-                  localStorage.setItem("choping-profile-open", "true");
-                }}
-                aria-label="Abrir mi perfil"
-                title="Mi perfil"
-              >
-                {userInitial}
-              </button>
+              <div className="profile-menu-anchor">
+                <button
+                  className="user-avatar-button"
+                  onClick={() => setMenuOpen((open) => !open)}
+                  aria-label="Abrir mi cuenta"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  title="Mi cuenta"
+                >
+                  {userInitial}
+                </button>
+                {menuOpen && (
+                  <ProfileMenu
+                    user={user}
+                    pendingReviews={pendingReviewCount}
+                    openAccount={(section) => {
+                      setAccountSection(section);
+                      setProfileOpen(true);
+                      localStorage.setItem("choping-profile-open", "true");
+                    }}
+                    openAdmin={() => setAdminOpen(true)}
+                    openStoreAdmin={openStoreDashboard}
+                    editProfile={() => {
+                      setAccountSection("edit");
+                      setProfileOpen(true);
+                    }}
+                    changePassword={() => {
+                      setAccountSection("password");
+                      setProfileOpen(true);
+                    }}
+                    logout={logout}
+                    close={() => setMenuOpen(false)}
+                  />
+                )}
+              </div>
             )}
             {isPlatformAdmin(user) && (
               <button className="nav-link" onClick={() => setAdminOpen(true)}>
@@ -513,6 +546,7 @@ function App() {
       )}
       {profileOpen && (
         <ClientProfile
+          section={accountSection}
           user={user}
           setUser={setUser}
           purchased={purchased}
@@ -520,7 +554,7 @@ function App() {
           openStoreAdmin={openStoreDashboard}
           store={store}
           logout={logout}
-          close={() => { setProfileOpen(false); localStorage.setItem("choping-profile-open", "false"); }}
+          close={() => { setProfileOpen(false); setAccountSection(""); localStorage.setItem("choping-profile-open", "false"); }}
         />
       )}
       {adminOpen && (

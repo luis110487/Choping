@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { money } from "../lib/api";
 import { isPlatformAdmin } from "../lib/accounts";
 import { PasswordModal } from "./PasswordModal";
@@ -6,7 +6,7 @@ import { StoreReviewModal } from "./StoreReviewModal";
 import { ReviewModal } from "./ReviewModal";
 import { EditProfileModal } from "./EditProfileModal";
 
-function ClientProfile({ user, setUser, purchased, openAdmin, openStoreAdmin, store, logout, close }) {
+function ClientProfile({ user, setUser, purchased, openAdmin, openStoreAdmin, store, logout, close, section = "" }) {
   const [reviewProduct, setReviewProduct] = useState(null), [reviewStore, setReviewStore] = useState(null), [passwordOpen, setPasswordOpen] = useState(false), [editOpen, setEditOpen] = useState(false), [refresh, setRefresh] = useState(0);
   const stores = [...new Set(purchased.map((product) => product.store))];
   const reviews = JSON.parse(localStorage.getItem("choping-reviews") || "{}");
@@ -15,6 +15,13 @@ function ClientProfile({ user, setUser, purchased, openAdmin, openStoreAdmin, st
   const pendingProducts = purchased.filter((product) => !reviews[product.id] && !dismissed[`product-${product.id}`]);
   const pendingStores = stores.filter((store) => !storeReviews[store] && !dismissed[`store-${store}`]);
   const dismiss = (key) => { const next = { ...dismissed, [key]: true }; localStorage.setItem("choping-dismissed-reviews", JSON.stringify(next)); setRefresh(refresh + 1); };
+  // The account menu says where the user wanted to land.
+  useEffect(() => {
+    if (section === "edit") return setEditOpen(true);
+    if (section === "password") return setPasswordOpen(true);
+    const target = { orders: ".profile-section", stores: ".profile-stores", reviews: ".profile-review" }[section];
+    if (target) document.querySelector(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [section]);
   return (
     <div className="overlay">
       <section className="cart-modal client-profile">
