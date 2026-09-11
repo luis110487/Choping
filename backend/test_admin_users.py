@@ -410,6 +410,39 @@ class AdminUserProvisioningTests(unittest.TestCase):
             staff, _ = visible_pending_catalog({'role': 'superadmin'})
             self.assertEqual(len(staff), 5)
 
+    def test_platform_theme_is_public_to_read_and_staff_only_to_write(self):
+        default = self.client.get('/api/platform/theme')
+        self.assertEqual(default.status_code, 200)
+        self.assertEqual(default.get_json(), {'background': '', 'fonts': {}})
+
+        headers = self.store_session()
+        self.assertEqual(
+            self.client.put('/api/platform/theme', headers=headers, json={'theme': {'background': '#000000'}}).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.put('/api/platform/theme', json={'theme': {'background': '#000000'}}).status_code,
+            403,
+        )
+
+        admin = {'Authorization': f"Bearer {access_token_for({'email': 'a@b.c', 'role': 'superadmin', 'name': 'A'})}"}
+        saved = self.client.put('/api/platform/theme', headers=admin, json={
+            'theme': {'background': '#FFF4E6', 'fonts': {'heading': 'editorial'}},
+        })
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.get_json()['theme'], {'background': '#fff4e6', 'fonts': {'heading': 'editorial'}})
+        self.assertEqual(self.client.get('/api/platform/theme').get_json()['background'], '#fff4e6')
+
+    def test_platform_theme_rejects_invalid_values(self):
+        admin = {'Authorization': f"Bearer {access_token_for({'email': 'a@b.c', 'role': 'superadmin', 'name': 'A'})}"}
+        for payload in (
+            {'background': 'red'},
+            {'fonts': {'heading': 'url(evil)'}},
+            {'fonts': {'footer': 'editorial'}},
+        ):
+            response = self.client.put('/api/platform/theme', headers=admin, json={'theme': payload})
+            self.assertEqual(response.status_code, 400, payload)
+
 
 if __name__ == '__main__':
     unittest.main()

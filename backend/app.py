@@ -116,6 +116,28 @@ def ensure_store_theme_schema():
 
 STORE_THEME_PRESETS = {'ocean', 'sunset', 'forest', 'mono'}
 STORE_THEME_COLOR_KEYS = {'background', 'surface', 'heading', 'accent', 'price', 'priceOld', 'icon'}
+class PlatformTheme(db.Model):
+    """Look of the public directory, shared by every visitor.
+
+    A single row: the platform has one directory, unlike stores which each
+    carry their own palette.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    background = db.Column(db.String(9), nullable=False, default='')
+    fonts = db.Column(db.Text, nullable=False, default='{}')
+
+    def as_dict(self):
+        try:
+            fonts = json.loads(self.fonts or '{}')
+        except ValueError:
+            fonts = {}
+        return {
+            'background': self.background or '',
+            'fonts': fonts if isinstance(fonts, dict) else {},
+        }
+
+DEFAULT_PLATFORM_THEME = {'background': '', 'fonts': {}}
+
 STORE_THEME_FONT_SLOTS = {'heading', 'body'}
 # Whitelisted so a store can never inject arbitrary CSS through the font name.
 STORE_THEME_FONTS = {'sistema', 'moderna', 'editorial', 'amable', 'legible', 'tecnica'}
@@ -580,6 +602,65 @@ def visible_pending_catalog(actor):
         store for store in catalog
         if store.get('approved', True) or (own and store.get('name', '').lower() == own)
     ], None
+
+
+def parse_platform_theme(payload):
+    """Validate the directory look, returning (theme, error)."""
+    if not isinstance(payload, dict):
+        return None, 'El tema enviado no es valido.'
+    background = str(payload.get('background') or '').strip().lower()
+    if background and not HEX_COLOR.match(background):
+        return None, 'El fondo debe estar en formato #rrggbb.'
+    raw_fonts = payload.get('fonts') or {}
+    if not isinstance(raw_fonts, dict):
+        return None, 'Las tipografias enviadas no son validas.'
+    fonts = {}
+    for slot, value in raw_fonts.items():
+        if slot not in STORE_THEME_FONT_SLOTS:
+            return None, f'La tipografia "{slot}" no se puede personalizar.'
+        name = str(value or '').strip().lower()
+        if name not in STORE_THEME_FONTS:
+            return None, f'La tipografia "{value}" no esta disponible.'
+        fonts[slot] = name
+    return {'background': background, 'fonts': fonts}, None
+
+
+def platform_theme_record():
+    record = PlatformTheme.query.first()
+    if not record:
+        record = PlatformTheme(id=1)
+        db.session.add(record)
+    return record
+
+
+@app.get('/api/platform/theme')
+def read_platform_theme():
+    # Public: visitors need the directory styling before signing in.
+    try:
+        record = PlatformTheme.query.first()
+    except Exception:
+        db.session.rollback()
+        return jsonify(DEFAULT_PLATFORM_THEME)
+    return jsonify(record.as_dict() if record else DEFAULT_PLATFORM_THEME)
+
+
+@app.put('/api/platform/theme')
+def save_platform_theme():
+    if not authenticated_actor():
+        return jsonify({'error': 'Solo un administrador puede personalizar el directorio.'}), 403
+    data = request.get_json(silent=True) or {}
+    theme, error = parse_platform_theme(data.get('theme') if isinstance(data.get('theme'), dict) else data)
+    if error:
+        return jsonify({'error': error}), 400
+    try:
+        record = platform_theme_record()
+        record.background = theme['background']
+        record.fonts = json.dumps(theme['fonts'])
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible guardar la personalizacion.'}), 500
+    return jsonify({'theme': theme})
 
 
 @app.put('/api/admin/stores/<path:name>/approval')

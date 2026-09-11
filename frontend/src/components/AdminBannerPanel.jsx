@@ -1,8 +1,99 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { API, money } from "../lib/api";
 import { configuredCategoryEntries } from "../lib/catalog";
+import { DEFAULT_FONTS, DEFAULT_PLATFORM_BACKGROUND, STORE_FONTS, STORE_FONT_SLOTS } from "../lib/theme";
 
-function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirectoryBanner, close, authToken }) {
+function PlatformLookEditor({ theme, setTheme, authToken }) {
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const timer = useRef(0);
+  const fonts = { ...DEFAULT_FONTS, ...(theme?.fonts || {}) };
+  const background = theme?.background || DEFAULT_PLATFORM_BACKGROUND;
+  const customised = Boolean(theme?.background) || Object.keys(theme?.fonts || {}).length > 0;
+
+  /** Apply at once, persist after the picker settles. */
+  const save = (next) => {
+    setTheme(next);
+    setStatus("saving");
+    setError("");
+    clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      try {
+        const response = await fetch(`${API}/api/platform/theme`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ theme: next }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setStatus("error");
+          setError(data.error || "No fue posible guardar la personalización.");
+        } else setStatus("saved");
+      } catch {
+        setStatus("error");
+        setError("No fue posible conectar con el servidor.");
+      }
+    }, 500);
+  };
+
+  return (
+    <div className="platform-look">
+      <div className="theme-color-head">
+        <h3>Apariencia del directorio</h3>
+        <span className="theme-save-state">
+          {status === "saving" && <em>Guardando…</em>}
+          {status === "saved" && <em className="ok">Guardado</em>}
+          {status === "error" && <em className="bad">{error}</em>}
+        </span>
+        {customised && (
+          <button type="button" className="nav-link" onClick={() => save({ background: "", fonts: {} })}>
+            Restaurar apariencia
+          </button>
+        )}
+      </div>
+      <p className="form-hint">
+        Aplica a la portada y al directorio de tiendas. Cada tienda conserva su propia personalización.
+      </p>
+      <label className="theme-color-row">
+        <input
+          type="color"
+          value={background}
+          onChange={(event) => save({ ...theme, background: event.target.value })}
+          aria-label="Fondo del directorio"
+        />
+        <span className="theme-color-copy">
+          <strong>Fondo del directorio</strong>
+          <small>Color detrás de la portada y las tarjetas de tienda</small>
+        </span>
+        <span className="theme-color-value">{background}</span>
+      </label>
+      <div className="theme-font-grid">
+        {STORE_FONT_SLOTS.map((slot) => (
+          <div className="theme-font-slot" key={slot.key}>
+            <strong>{slot.label}</strong>
+            <small>{slot.hint}</small>
+            <div className="theme-font-options">
+              {STORE_FONTS.map((font) => (
+                <button
+                  key={font.id}
+                  className={`theme-font-option ${fonts[slot.key] === font.id ? "selected" : ""}`}
+                  style={{ fontFamily: font.stack }}
+                  onClick={() => save({ ...theme, fonts: { ...fonts, [slot.key]: font.id } })}
+                >
+                  <span className="theme-font-sample">Aa</span>
+                  <span className="theme-font-name">{font.name}</span>
+                  <small>{font.detail}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirectoryBanner, close, authToken, platformTheme, setPlatformTheme }) {
   const defaultImages = [
     "/banner-home-1.png",
     "/banner-home-2.png",
@@ -241,6 +332,12 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
               Banners del directorio
             </button>
             <button
+              className={tab === "look" ? "selected" : ""}
+              onClick={() => setTab("look")}
+            >
+              Apariencia
+            </button>
+            <button
               className={tab === "stores" ? "selected" : ""}
               onClick={() => setTab("stores")}
             >
@@ -355,6 +452,8 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
                 ))}
               </div>
             </>
+          ) : tab === "look" ? (
+            <PlatformLookEditor theme={platformTheme} setTheme={setPlatformTheme} authToken={authToken} />
           ) : tab === "banners" || tab === "directory-banners" ? (
             <>
               <h2>{tab === "directory-banners" ? "Banners entre tiendas" : "Banners superiores"}</h2>

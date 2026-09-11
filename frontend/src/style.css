@@ -173,3 +173,11 @@
 .banner-slider,.store-banner{width:min(1360px,calc(100% - 80px));box-shadow:0 18px 40px #063f9f2e}
 @media (max-width:760px){.banner-slider,.store-banner{width:calc(100% - 44px)}}
 @media (max-width:600px){.banner-slider,.store-banner{width:calc(100% - 32px);box-shadow:0 10px 24px #063f9f24}}
+
+/* --- Apariencia del directorio --------------------------------------- */
+/* Solo el directorio: dentro de una tienda mandan las variables --store-*. */
+.directory-app{background:var(--page-background);font-family:var(--page-font-body)}
+.directory-app h1,.directory-app h2,.directory-app h3,
+.directory-app .store-section-heading small{font-family:var(--page-font-heading)}
+.platform-look{display:grid;gap:14px}
+.platform-look .theme-color-row{cursor:pointer}

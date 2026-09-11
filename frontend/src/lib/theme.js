@@ -73,4 +73,18 @@ function themeStyleVars(value) {
   return vars;
 }
 
-export { DEFAULT_FONTS, DEFAULT_PRESET, STORE_COLOR_FIELDS, STORE_FONTS, STORE_FONT_SLOTS, STORE_PRESETS, fontStack, normalizeTheme, presetPalette, themeClassName, themeFonts, themePalette, themeStyleVars };
+
+const DEFAULT_PLATFORM_BACKGROUND = "#f2f7ff";
+const DEFAULT_PLATFORM_THEME = { background: "", fonts: {} };
+
+/** Directory look: the platform default with the admin's choices on top. */
+function platformStyleVars(theme) {
+  const fonts = { ...DEFAULT_FONTS, ...(theme?.fonts || {}) };
+  return {
+    "--page-background": theme?.background || DEFAULT_PLATFORM_BACKGROUND,
+    "--page-font-heading": fontStack(fonts.heading),
+    "--page-font-body": fontStack(fonts.body),
+  };
+}
+
+export { DEFAULT_FONTS, DEFAULT_PLATFORM_BACKGROUND, DEFAULT_PLATFORM_THEME, DEFAULT_PRESET, STORE_COLOR_FIELDS, STORE_FONTS, STORE_FONT_SLOTS, STORE_PRESETS, fontStack, normalizeTheme, platformStyleVars, presetPalette, themeClassName, themeFonts, themePalette, themeStyleVars };

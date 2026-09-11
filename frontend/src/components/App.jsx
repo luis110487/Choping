@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { API, money, productImageUrl, storeMediaUrl } from "../lib/api";
-import { normalizeTheme, themeClassName, themeStyleVars } from "../lib/theme";
+import { DEFAULT_PLATFORM_THEME, normalizeTheme, platformStyleVars, themeClassName, themeStyleVars } from "../lib/theme";
 import { configuredCategoryEntries } from "../lib/catalog";
 import { isPlatformAdmin, loadCurrentUser, normalizeAccount } from "../lib/accounts";
 import { Stars } from "./Stars";
@@ -38,12 +38,19 @@ function App() {
     [profileOpen, setProfileOpen] = useState(() => localStorage.getItem("choping-profile-open") === "true"),
     [storeAdminOpen, setStoreAdminOpen] = useState(false),
     themeSaveTimer = useRef(0),
+    [platformTheme, setPlatformTheme] = useState(DEFAULT_PLATFORM_THEME),
     [storeThemes, setStoreThemes] = useState(() =>
       JSON.parse(
         localStorage.getItem("choping-store-themes") ||
           '{"Tech Zone":"ocean","Casa Viva":"sunset","EcoRuedas":"forest"}',
       ),
     );
+  useEffect(() => {
+    fetch(`${API}/api/platform/theme`)
+      .then((r) => r.json())
+      .then((data) => data && typeof data === "object" && setPlatformTheme(data))
+      .catch(() => {});
+  }, []);
   useEffect(() => {
     const staff = isPlatformAdmin(user) || user?.role === "admin" || user?.role === "superadmin";
     const includePending = user?.role === "tienda" || staff ? "?include_pending=true" : "";
@@ -249,8 +256,8 @@ function App() {
   };
   return (
     <div
-      className={store ? `store-app ${themeClassName(storeThemes[store.name])}` : "store-app"}
-      style={store ? themeStyleVars(storeThemes[store.name]) : undefined}
+      className={store ? `store-app ${themeClassName(storeThemes[store.name])}` : "store-app directory-app"}
+      style={store ? themeStyleVars(storeThemes[store.name]) : platformStyleVars(platformTheme)}
     >
       <header>
         <div className="nav">
@@ -522,6 +529,8 @@ function App() {
           banner={banner}
           directoryBanner={directoryBanner}
           authToken={localStorage.getItem("choping-auth-token") || ""}
+          platformTheme={platformTheme}
+          setPlatformTheme={setPlatformTheme}
           setBanner={(value) => {
             setBanner(value);
             localStorage.setItem("choping-banner", String(value));
