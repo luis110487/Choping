@@ -12,6 +12,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+from colombia import valid_location
 
 IS_PRODUCTION = os.environ.get('FLASK_ENV', 'production') == 'production' and bool(os.environ.get('RENDER'))
 
@@ -303,7 +304,23 @@ def database_catalog(include_pending=False):
         db.session.rollback()
         return None
 
-def ensure_store_workspace(name, owner_name, category, city, description):
+def ensure_store_department_column():
+    """Add `department` to an existing stores table.
+
+    Non fatal: without the column the app keeps working with the city alone.
+    """
+    if not os.environ.get('DATABASE_URL'):
+        return False
+    try:
+        db.session.execute(text('alter table stores add column if not exists department text'))
+        db.session.commit()
+        return True
+    except Exception:
+        db.session.rollback()
+        return False
+
+
+def ensure_store_workspace(name, owner_name, category, city, description, department=''):
     """Create the private workspace used by a store administrator.
 
     New stores remain pending, so only the owner and platform administrators
@@ -318,19 +335,20 @@ def ensure_store_workspace(name, owner_name, category, city, description):
         ).mappings().first()
         if existing:
             return True, None
-        db.session.execute(
-            text('''
-                insert into stores (name, owner_name, category, city, description, approved)
-                values (:name, :owner_name, :category, :city, :description, false)
-            '''),
-            {
-                'name': name,
-                'owner_name': owner_name,
-                'category': category,
-                'city': city,
-                'description': description,
-            },
-        )
+        columns = 'name, owner_name, category, city, description, approved'
+        values = ':name, :owner_name, :category, :city, :description, false'
+        params = {
+            'name': name,
+            'owner_name': owner_name,
+            'category': category,
+            'city': city,
+            'description': description,
+        }
+        if department and ensure_store_department_column():
+            columns += ', department'
+            values += ', :department'
+            params['department'] = department
+        db.session.execute(text(f'insert into stores ({columns}) values ({values})'), params)
         db.session.commit()
         return True, None
     except Exception:
@@ -1104,6 +1122,9 @@ def register():
         return jsonify({'error': 'El telefono es obligatorio para clientes'}), 400
     if role == 'tienda' and not all(data.get(field, '').strip() for field in ('store_name', 'category', 'city', 'description')):
         return jsonify({'error': 'Las tiendas deben indicar nombre, categoria, ciudad y descripcion'}), 400
+    department = data.get('department', '').strip()
+    if role == 'tienda' and department and not valid_location(department, data.get('city', '').strip()):
+        return jsonify({'error': 'La ciudad no pertenece al departamento seleccionado.'}), 400
     if role == 'tienda':
         workspace_ready, workspace_error = ensure_store_workspace(
             data['store_name'].strip(),

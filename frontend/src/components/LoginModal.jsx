@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { API } from "../lib/api";
+import { configuredCategories } from "../lib/catalog";
+import { DEPARTAMENTOS, municipiosDe } from "../lib/colombia";
 
 function LoginModal({ close, onLogin, currentStore = "" }) {
   const [register, setRegister] = useState(false),
@@ -11,6 +13,7 @@ function LoginModal({ close, onLogin, currentStore = "" }) {
     [storeName, setStoreName] = useState(currentStore),
     [category, setCategory] = useState(""),
     [city, setCity] = useState(""),
+    [department, setDepartment] = useState(""),
     [description, setDescription] = useState(""),
     [message, setMessage] = useState("");
   const submit = async (e) => {
@@ -26,6 +29,7 @@ function LoginModal({ close, onLogin, currentStore = "" }) {
           store_name: storeName,
           category,
           city,
+          department,
           description,
         }
       : { email, password };
@@ -101,19 +105,55 @@ function LoginModal({ close, onLogin, currentStore = "" }) {
                   </label>
                   <label>
                     Categoría
-                    <input
+                    <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value)}
                       required
-                    />
+                    >
+                      <option value="">Selecciona una categoría</option>
+                      {configuredCategories().map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label>
-                    Ciudad
-                    <input
+                    Departamento
+                    <select
+                      value={department}
+                      onChange={(e) => {
+                        setDepartment(e.target.value);
+                        // The city belongs to the previous department.
+                        setCity("");
+                      }}
+                      required
+                    >
+                      <option value="">Selecciona un departamento</option>
+                      {DEPARTAMENTOS.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Ciudad o municipio
+                    <select
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
+                      disabled={!department}
                       required
-                    />
+                    >
+                      <option value="">
+                        {department ? "Selecciona una ciudad" : "Elige primero el departamento"}
+                      </option>
+                      {municipiosDe(department).map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label>
                     Descripción
