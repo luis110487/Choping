@@ -1,0 +1,16 @@
+{
+  "name": "Choping",
+  "short_name": "Choping",
+  "description": "Una nueva forma de comprar y vender.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#063f9f",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/choping-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
