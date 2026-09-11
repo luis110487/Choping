@@ -149,6 +149,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
       .then((data) => Array.isArray(data) && setManagedStores(data))
       .catch(() => setManagedStores(stores));
   }, [stores, authToken]);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [statusBusy, setStatusBusy] = useState("");
   /** Suspend or reactivate a store or an account. */
   const changeStatus = async (kind, id, active) => {
@@ -323,7 +324,11 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
   return (
     <div className="overlay admin-overlay">
       <section className="admin-dashboard-panel">
-        <aside className="admin-sidebar">
+        {menuOpen && <div className="panel-scrim" onClick={() => setMenuOpen(false)} />}
+        <aside
+          className={`admin-sidebar${menuOpen ? " open" : ""}`}
+          onClick={() => setMenuOpen(false)}
+        >
           <div className="admin-brand"><img src={`${API}/static/img/choping-logo.png`} alt="Choping" /><span>Administración global</span></div>
           <button className="admin-back-button" onClick={close}>← <span>Ir a tiendas</span></button>
           <button className={tab === "summary" ? "active" : ""} onClick={() => setTab("summary")}>⌂ <span>Dashboard</span></button>
@@ -339,6 +344,15 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
           <div className="admin-sidebar-footer">Sesión de superadministrador</div>
         </aside>
         <div className="admin-main">
+          <button
+            className="panel-menu-button"
+            type="button"
+            aria-label="Abrir el menú del panel"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(true)}
+          >
+            ☰
+          </button>
         <button className="modal-close" onClick={close}>
           ×
         </button>

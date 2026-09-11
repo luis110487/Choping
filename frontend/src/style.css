@@ -468,3 +468,26 @@ button.store-row-action:hover{border-color:var(--choping-blue);color:var(--chopi
 button.store-row-action.danger:hover{border-color:#c81e4a;color:#c81e4a;background:#fdeef3}
 button.store-delete-confirm{background:#c81e4a;border:1px solid #c81e4a}
 button.store-delete-confirm:hover{background:#a8173c}
+
+/* --- Menu hamburguesa de los paneles ---------------------------------- */
+/* En pantallas pequeñas las barras laterales se ocultaban sin dejar ninguna
+   forma de navegar: el panel quedaba sin menu. Ahora se abren como cajon. */
+button.panel-menu-button{display:none;position:absolute;top:16px;left:16px;z-index:12;width:42px;height:42px;padding:0;border:1px solid var(--choping-border);border-radius:10px;background:var(--choping-white);color:var(--choping-dark);font-size:19px;line-height:1;cursor:pointer;box-shadow:0 4px 14px rgba(28,65,110,.10)}
+button.panel-menu-button:hover{border-color:var(--choping-blue);color:var(--choping-blue)}
+.panel-scrim{position:fixed;inset:0;z-index:29;background:rgba(16,43,87,.45)}
+
+@media (max-width:800px){
+  button.panel-menu-button{display:inline-flex;align-items:center;justify-content:center}
+  .store-admin-main,.admin-main{padding-top:8px}
+  .store-admin-sidebar,.admin-sidebar{
+    display:flex;position:fixed;top:0;left:0;bottom:0;z-index:30;
+    width:min(286px,84vw);overflow-y:auto;
+    transform:translateX(-100%);visibility:hidden;
+    transition:transform .25s ease,visibility .25s ease;
+    box-shadow:0 0 40px rgba(8,29,59,.4);
+  }
+  .store-admin-sidebar.open,.admin-sidebar.open{transform:none;visibility:visible}
+}
+@media (prefers-reduced-motion:reduce){
+  .store-admin-sidebar,.admin-sidebar{transition:none}
+}

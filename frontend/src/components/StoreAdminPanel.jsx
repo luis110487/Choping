@@ -5,6 +5,7 @@ import { StoreThemeStudio } from "./StoreThemeStudio";
 import { PasswordModal } from "./PasswordModal";
 
 function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, createProduct, updateStore, productCategories = [], createCategory, editProduct, removeProduct, viewStore, close }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [removingProduct, setRemovingProduct] = useState(null);
   const [newCategory, setNewCategory] = useState("");
@@ -146,7 +147,13 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
   return (
     <div className="overlay store-admin-overlay">
       <section className="store-admin-panel">
-        <aside className="store-admin-sidebar">
+        {menuOpen && <div className="panel-scrim" onClick={() => setMenuOpen(false)} />}
+        {/* Cualquier clic dentro cierra el cajon: la navegacion siempre
+            lleva a otra pestaña, asi que no hace falta cerrarlo aparte. */}
+        <aside
+          className={`store-admin-sidebar${menuOpen ? " open" : ""}`}
+          onClick={() => setMenuOpen(false)}
+        >
           <div className="store-admin-brand"><strong>CHOPING</strong><span>Mi tienda</span></div>
           <button className="store-admin-preview" onClick={viewStore}>↗ <span>Ver mi tienda</span></button>
           <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")}>⌂ <span>Inicio</span></button>
@@ -158,6 +165,15 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
           <div className="store-admin-sidebar-footer"><button onClick={close}>↩ <span>Cerrar panel</span></button></div>
         </aside>
         <div className="store-admin-main">
+          <button
+            className="panel-menu-button"
+            type="button"
+            aria-label="Abrir el menú del panel"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(true)}
+          >
+            ☰
+          </button>
           <button className="modal-close" onClick={close}>×</button>
           <header className="store-admin-header"><div><small>MI TIENDA</small><h1>¡Hola!</h1><p>Gestiona {store?.name || "tu tienda"} desde un solo lugar.</p></div><div className="store-admin-account"><span>{store?.name?.slice(0, 1) || "T"}</span><strong>{store?.name || "Mi tienda"}</strong></div></header>
           {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras confirmadas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategoryCount}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => { setTab("products"); showProductForm(); }}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>Activo</span><button className="store-row-action" aria-label={`Editar ${product.name}`} title="Editar" onClick={() => startEditing(product)}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark"><span>{store?.name?.slice(0, 1) || "T"}</span></div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
