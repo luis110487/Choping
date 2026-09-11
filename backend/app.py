@@ -53,7 +53,7 @@ class Product(db.Model):
     description = db.Column(db.Text)
     image = db.Column(db.String(255))
     store = db.Column(db.String(120), nullable=False, default='Tienda Choping')
-    rating = db.Column(db.Float, default=4.5)
+    rating = db.Column(db.Float, default=0)
 
 class LocalUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -229,7 +229,7 @@ def apply_store_themes(catalog):
         theme, media = saved.get((store.get('name') or '').lower(), (DEFAULT_STORE_THEME, DEFAULT_STORE_MEDIA))
         store['theme'] = theme
         store['media'] = media
-    return catalog
+    return apply_ratings(catalog)
 
 DEMO_PRODUCTS = [
     {'name': 'Combo PC Gamer TUF', 'category': 'Tecnologia', 'price': 3850000, 'description': 'Computador gamer completo para jugar, estudiar y crear contenido.', 'image': 'products/pc-gamer.png', 'store': 'Tech Zone', 'rating': 4.8},
@@ -1197,6 +1197,127 @@ def create_product_category():
         db.session.rollback()
         return jsonify({'error': 'No fue posible crear la categoria.'}), 500
     return jsonify({'category': {'name': category.name, 'icon': category.icon or ''}}), 201
+
+
+class Review(db.Model):
+    """Una calificacion de una persona sobre un producto o una tienda.
+
+    La nota que se muestra sale del promedio de estas filas, no de una columna
+    fija: antes todo nacia en 4.5 y las reseñas reales no cambiaban nada.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    target_type = db.Column(db.String(10), nullable=False)
+    target_key = db.Column(db.String(120), nullable=False)
+    user_email = db.Column(db.String(255), nullable=False)
+    rating = db.Column(db.Integer, nullable=False)
+    comment = db.Column(db.Text, nullable=False, default='')
+    __table_args__ = (
+        db.UniqueConstraint('target_type', 'target_key', 'user_email', name='uq_review_por_persona'),
+    )
+
+
+REVIEW_TARGETS = {'product', 'store'}
+
+
+def review_key(target_type, target):
+    """Clave estable: los productos por id, las tiendas por nombre normalizado."""
+    value = str(target or '').strip()
+    return value if target_type == 'product' else value.lower()
+
+
+def review_summary(target_type):
+    """Promedio y conteo por objetivo, en una sola consulta."""
+    try:
+        rows = db.session.query(
+            Review.target_key,
+            db.func.avg(Review.rating),
+            db.func.count(Review.id),
+        ).filter(Review.target_type == target_type).group_by(Review.target_key).all()
+    except Exception:
+        db.session.rollback()
+        return {}
+    return {key: (round(float(average), 1), int(total)) for key, average, total in rows}
+
+
+def apply_ratings(catalog):
+    """Reemplaza la nota de cada tienda y producto por la real."""
+    stores = review_summary('store')
+    products = review_summary('product')
+    for store in catalog:
+        average, total = stores.get(review_key('store', store.get('name')), (0.0, 0))
+        store['rating'] = average
+        store['reviews_count'] = total
+        for product in store.get('products', []):
+            average, total = products.get(review_key('product', product.get('id')), (0.0, 0))
+            product['rating'] = average
+            product['reviews_count'] = total
+    return catalog
+
+
+@app.get('/api/reviews')
+def list_reviews():
+    target_type = (request.args.get('type') or '').strip().lower()
+    if target_type not in REVIEW_TARGETS:
+        return jsonify({'error': 'Indica si la reseña es de producto o de tienda.'}), 400
+    key = review_key(target_type, request.args.get('target'))
+    if not key:
+        return jsonify({'error': 'Indica el producto o la tienda.'}), 400
+    try:
+        rows = (Review.query
+                .filter_by(target_type=target_type, target_key=key)
+                .order_by(Review.id.desc()).all())
+    except Exception:
+        db.session.rollback()
+        return jsonify({'reviews': [], 'rating': 0, 'count': 0})
+    total = len(rows)
+    average = round(sum(row.rating for row in rows) / total, 1) if total else 0
+    return jsonify({
+        'rating': average,
+        'count': total,
+        'reviews': [{
+            'rating': row.rating,
+            'comment': row.comment or '',
+            'author': (row.user_email or '').split('@')[0],
+        } for row in rows],
+    })
+
+
+@app.post('/api/reviews')
+def save_review():
+    """Una persona, una reseña por objetivo: volver a enviarla la actualiza."""
+    actor = authenticated_session()
+    if not actor:
+        return jsonify({'error': 'Inicia sesion para dejar una reseña.'}), 401
+    data = request.get_json(silent=True) or {}
+    target_type = (data.get('type') or '').strip().lower()
+    if target_type not in REVIEW_TARGETS:
+        return jsonify({'error': 'Indica si la reseña es de producto o de tienda.'}), 400
+    key = review_key(target_type, data.get('target'))
+    if not key:
+        return jsonify({'error': 'Indica el producto o la tienda.'}), 400
+    try:
+        rating = int(data.get('rating', 0))
+    except (TypeError, ValueError):
+        rating = 0
+    if rating < 1 or rating > 5:
+        return jsonify({'error': 'La calificacion debe estar entre 1 y 5 estrellas.'}), 400
+    comment = (data.get('comment') or '').strip()[:600]
+    email = (actor.get('email') or '').strip().lower()
+    try:
+        review = Review.query.filter_by(
+            target_type=target_type, target_key=key, user_email=email,
+        ).first()
+        if not review:
+            review = Review(target_type=target_type, target_key=key, user_email=email)
+            db.session.add(review)
+        review.rating = rating
+        review.comment = comment
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible guardar la reseña.'}), 500
+    summary = review_summary(target_type).get(key, (0.0, 0))
+    return jsonify({'rating': summary[0], 'count': summary[1]}), 201
 
 
 @app.get('/api/auth/session')

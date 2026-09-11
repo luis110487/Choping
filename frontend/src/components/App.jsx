@@ -196,7 +196,7 @@ function App() {
               </div>
               <h2>{s.name}</h2>
               <div className="store-card-meta">
-                <Stars value={s.rating} />
+                <Stars value={s.rating} count={s.reviews_count} />
                 <span>
                   {catalogue.length
                     ? `${catalogue.length} producto${catalogue.length === 1 ? "" : "s"}`
@@ -583,7 +583,7 @@ function App() {
                 {store.description ? ` — ${store.description}` : ""}
               </p>
             </div>
-            <Stars value={store.rating} />
+            <Stars value={store.rating} count={store.reviews_count} />
           </header>
           <div className="shop-grid">
             {products.map((p) => (
@@ -599,7 +599,7 @@ function App() {
                 <div className="product-info">
                   <small>{p.category}</small>
                   <h2>{p.name}</h2>
-                  <Stars value={p.rating} />
+                  <Stars value={p.rating} count={p.reviews_count} />
                   <p>{p.description}</p>
                   <div className="product-meta">
                     <div className="product-price-stack">

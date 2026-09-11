@@ -54,7 +54,7 @@ function ProductModal({ product, add, close }) {
           <div className="modal-info">
             <small>{product.category}</small>
             <h2>{product.name}</h2>
-            <Stars value={product.rating} />
+            <Stars value={product.rating} count={product.reviews_count} />
             <p>{product.description}</p>
             <div className="modal-product-pricing">
               {Number(product.original_price) > Number(product.price) && <del>{money(product.original_price)}</del>}

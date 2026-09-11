@@ -11,7 +11,7 @@ os.environ['SUPERADMIN_PASSWORD'] = 'test-superadmin-password'
 os.environ['SUPABASE_URL'] = 'https://example.supabase.co'
 os.environ['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-role-key'
 
-from app import LocalUser, access_token_for, app, db, seed_product_categories, visible_pending_catalog
+from app import LocalUser, access_token_for, app, apply_ratings, db, seed_product_categories, visible_pending_catalog
 
 
 class AdminUserProvisioningTests(unittest.TestCase):
@@ -653,6 +653,62 @@ class AdminUserProvisioningTests(unittest.TestCase):
                             json={'name': '', 'category': 'Hogar', 'price': 1, 'stock': 1}).status_code,
             400,
         )
+
+    def test_ratings_start_at_zero_and_grow_with_reviews(self):
+        catalog = [{'name': 'Tech Zone', 'rating': 4.8, 'products': [{'id': 7, 'rating': 4.5}]}]
+        # Sin reseñas todo queda en cero, sin importar lo que traiga la fila.
+        applied = apply_ratings([dict(store, products=list(store['products'])) for store in catalog])
+        self.assertEqual(applied[0]['rating'], 0.0)
+        self.assertEqual(applied[0]['reviews_count'], 0)
+        self.assertEqual(applied[0]['products'][0]['rating'], 0.0)
+
+        ana = {'Authorization': f"Bearer {access_token_for({'email': 'ana@x.c', 'role': 'cliente', 'name': 'Ana'})}"}
+        beto = {'Authorization': f"Bearer {access_token_for({'email': 'beto@x.c', 'role': 'cliente', 'name': 'Beto'})}"}
+
+        first = self.client.post('/api/reviews', headers=ana,
+                                 json={'type': 'store', 'target': 'Tech Zone', 'rating': 4})
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(first.get_json(), {'rating': 4.0, 'count': 1})
+
+        second = self.client.post('/api/reviews', headers=beto,
+                                  json={'type': 'store', 'target': 'Tech Zone', 'rating': 5})
+        self.assertEqual(second.get_json(), {'rating': 4.5, 'count': 2})
+
+        # Una persona, una reseña: reenviarla actualiza y no suma.
+        again = self.client.post('/api/reviews', headers=ana,
+                                 json={'type': 'store', 'target': '  TECH zone ', 'rating': 2})
+        self.assertEqual(again.get_json(), {'rating': 3.5, 'count': 2})
+
+        applied = apply_ratings([dict(store, products=list(store['products'])) for store in catalog])
+        self.assertEqual(applied[0]['rating'], 3.5)
+        self.assertEqual(applied[0]['reviews_count'], 2)
+
+    def test_review_guards(self):
+        ana = {'Authorization': f"Bearer {access_token_for({'email': 'ana@x.c', 'role': 'cliente', 'name': 'Ana'})}"}
+        for rating in (0, 6, -1, 'cinco'):
+            response = self.client.post('/api/reviews', headers=ana,
+                                        json={'type': 'store', 'target': 'Tech Zone', 'rating': rating})
+            self.assertEqual(response.status_code, 400, rating)
+        self.assertEqual(
+            self.client.post('/api/reviews', headers=ana,
+                             json={'type': 'otra', 'target': 'Tech Zone', 'rating': 5}).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.post('/api/reviews', json={'type': 'store', 'target': 'Tech Zone', 'rating': 5}).status_code,
+            401,
+        )
+
+    def test_reviews_can_be_read_without_session(self):
+        ana = {'Authorization': f"Bearer {access_token_for({'email': 'ana@x.c', 'role': 'cliente', 'name': 'Ana'})}"}
+        self.client.post('/api/reviews', headers=ana,
+                         json={'type': 'product', 'target': 12, 'rating': 5, 'comment': 'Excelente'})
+        public = self.client.get('/api/reviews?type=product&target=12')
+        self.assertEqual(public.status_code, 200)
+        body = public.get_json()
+        self.assertEqual(body['rating'], 5)
+        self.assertEqual(body['count'], 1)
+        self.assertEqual(body['reviews'][0]['author'], 'ana')
 
 
 if __name__ == '__main__':

@@ -491,3 +491,11 @@ button.panel-menu-button:hover{border-color:var(--choping-blue);color:var(--chop
 @media (prefers-reduced-motion:reduce){
   .store-admin-sidebar,.admin-sidebar{transition:none}
 }
+
+/* --- Estrellas segun la nota real ------------------------------------- */
+.stars{display:inline-flex;align-items:center;gap:5px}
+.stars-track{position:relative;display:inline-block;color:#d7dfea;letter-spacing:1px;white-space:nowrap}
+.stars-fill{position:absolute;top:0;left:0;overflow:hidden;color:var(--store-icon,#ffb703);white-space:nowrap}
+.stars b{font-size:13px;color:var(--choping-dark)}
+.stars small{font-size:12px;color:var(--choping-muted)}
+.stars-empty{color:var(--choping-muted);font-size:12px}
