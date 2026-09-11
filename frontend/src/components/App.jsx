@@ -106,16 +106,22 @@ function App() {
         }
       });
   }, [user?.role]);
+  // Llevar a la duena a su panel al entrar, pero UNA sola vez: con `store` en
+  // las dependencias, el efecto volvia a seleccionar su tienda cada vez que
+  // quedaba en null, asi que pulsar "Tiendas" no llegaba nunca al directorio.
+  const landedOnOwnStore = useRef(false);
   useEffect(() => {
-    if (user?.role !== "tienda" || store || !user.store_name) return;
+    if (landedOnOwnStore.current) return;
+    if (user?.role !== "tienda" || !user.store_name) return;
     const assignedStore = stores.find(
       (item) => item.name.toLowerCase() === user.store_name.toLowerCase(),
     );
     if (assignedStore) {
+      landedOnOwnStore.current = true;
       setStore(assignedStore);
       setStoreAdminOpen(true);
     }
-  }, [stores, user, store]);
+  }, [stores, user]);
   useEffect(
     () => localStorage.setItem("choping-cart", JSON.stringify(cart)),
     [cart],
@@ -232,6 +238,7 @@ function App() {
   const logout = () => {
     setUser(null);
     setMenuOpen(false);
+    landedOnOwnStore.current = false;
     localStorage.removeItem("choping-user");
     localStorage.removeItem("choping-auth-token");
     localStorage.removeItem("choping-profile-open");
@@ -430,8 +437,12 @@ function App() {
               className="nav-link"
               onClick={() => {
                 setStore(null);
+                setStoreAdminOpen(false);
                 setShowAllProducts(false);
+                setShowAllStores(false);
                 setQuery("");
+                // El filtro venia de la tienda que se estaba viendo.
+                setCategoryFilter("");
               }}
             >
               Tiendas
@@ -690,7 +701,7 @@ function App() {
           close={() => setAdminOpen(false)}
         />
       )}
-      {storeAdminOpen && (
+      {storeAdminOpen && store && (
         <StoreAdminPanel
           store={store}
           user={user}
