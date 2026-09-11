@@ -113,27 +113,60 @@ function App() {
     (s) => !s.featured && !featuredStoreNames.includes(s.name),
   );
   const renderStoreCards = (items, featured = false) =>
-    items.map((s) => (
-      <article
-        className={`store-card${featured ? " featured-store-card" : ""}`}
-        key={s.name}
-        onClick={() => {
-          setStore(s);
-          setQuery("");
-          setCategoryFilter("");
-        }}
-      >
-        <div className="store-mark">{s.name.slice(0, 1)}</div>
-        <div>
-          {featured && <span className="featured-label">Destacada</span>}
-          <small>{s.category}</small>
-          <h2>{s.name}</h2>
-          <Stars value={s.rating} />
-          <p>{s.products.length} productos disponibles</p>
-          <button className="btn">Ver tienda</button>
-        </div>
-      </article>
-    ));
+    items.map((s) => {
+      const catalogue = s.products || [];
+      const preview = catalogue.slice(0, 3);
+      return (
+        <article
+          className={`store-card${featured ? " featured-store-card" : ""}${catalogue.length ? "" : " store-card-empty"}`}
+          key={s.name}
+          onClick={() => {
+            setStore(s);
+            setQuery("");
+            setCategoryFilter("");
+          }}
+        >
+          <div className="store-card-head">
+            {s.media?.logo ? (
+              <img className="store-card-logo" src={storeMediaUrl(s.media.logo)} alt={`Logo de ${s.name}`} />
+            ) : (
+              <div className="store-mark">{s.name.slice(0, 1)}</div>
+            )}
+            <div className="store-card-title">
+              <div className="store-card-chips">
+                {featured && <span className="featured-label">Destacada</span>}
+                {s.category && <span className="store-chip">{s.category}</span>}
+              </div>
+              <h2>{s.name}</h2>
+              <div className="store-card-meta">
+                <Stars value={s.rating} />
+                <span>
+                  {catalogue.length
+                    ? `${catalogue.length} producto${catalogue.length === 1 ? "" : "s"}`
+                    : "Sin productos aún"}
+                </span>
+              </div>
+            </div>
+          </div>
+          {preview.length ? (
+            <div
+              className="store-card-preview"
+              aria-hidden="true"
+              style={{ gridTemplateColumns: `repeat(${preview.length}, 1fr)` }}
+            >
+              {preview.map((product) => (
+                <img key={product.id} src={productImageUrl(product.image)} alt="" loading="lazy" />
+              ))}
+            </div>
+          ) : (
+            <p className="store-card-placeholder">Esta tienda todavía no publica productos.</p>
+          )}
+          <button className="btn store-card-cta">
+            {catalogue.length ? "Ver tienda" : "Conocer la tienda"}
+          </button>
+        </article>
+      );
+    });
   const add = (p, q = 1) =>
     setCart((c) => {
       const stock = Number(p.stock ?? Number.POSITIVE_INFINITY);
