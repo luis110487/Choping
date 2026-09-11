@@ -399,6 +399,7 @@ function App() {
               >
                 <div className="product-photo">
                   <img src={productImageUrl(p.image)} alt={p.name} />
+                  {Number(p.original_price) > Number(p.price) && <span className="product-sale-badge">Oferta</span>}
                 </div>
                 <div className="product-info">
                   <small>{p.category}</small>
