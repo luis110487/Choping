@@ -7,6 +7,5 @@ __pycache__/
 backend/instance/
 frontend/node_modules/
 frontend/dist/
-encuentra_mvp_800k/.git/
-encuentra_mvp_800k/__pycache__/
+encuentra_mvp_800k/
 backend/static/img/uploads/
