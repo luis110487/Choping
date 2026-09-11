@@ -86,6 +86,12 @@ function App() {
     [cart, setCart] = useState(() =>
       JSON.parse(localStorage.getItem("choping-cart") || "[]"),
     ),
+    [favorites, setFavorites] = useState(() =>
+      JSON.parse(localStorage.getItem("choping-favorites") || "[]"),
+    ),
+    [favoritesOnly, setFavoritesOnly] = useState(false),
+    [sortBy, setSortBy] = useState("featured"),
+    [catalogPage, setCatalogPage] = useState(1),
     [cartOpen, setCartOpen] = useState(false),
     [purchased, setPurchased] = useState(() =>
       JSON.parse(localStorage.getItem("choping-purchased") || "[]"),
@@ -127,7 +133,12 @@ function App() {
     () => localStorage.setItem("choping-cart", JSON.stringify(cart)),
     [cart],
   );
-  const products = (
+  useEffect(
+    () => localStorage.setItem("choping-favorites", JSON.stringify(favorites)),
+    [favorites],
+  );
+  useEffect(() => setCatalogPage(1), [query, categoryFilter, sortBy, store, favoritesOnly]);
+  const matchingProducts = (
     store ? store.products : stores.flatMap((s) => s.products)
   ).filter(
     (p) =>
@@ -135,11 +146,20 @@ function App() {
         `${p.name} ${p.category} ${p.store}`
           .toLowerCase()
           .includes(query.toLowerCase())) &&
-      (!categoryFilter || p.category === categoryFilter),
+      (!categoryFilter || p.category === categoryFilter) &&
+      (!favoritesOnly || favorites.includes(String(p.id))),
   );
-  const categories = store
-    ? [...new Set(store.products.map((p) => p.category))]
-    : [];
+  const sortedProducts = [...matchingProducts].sort((first, second) => {
+    if (sortBy === "price-asc") return Number(first.price) - Number(second.price);
+    if (sortBy === "price-desc") return Number(second.price) - Number(first.price);
+    if (sortBy === "rating") return Number(second.rating || 0) - Number(first.rating || 0);
+    if (sortBy === "newest") return Number(second.id || 0) - Number(first.id || 0);
+    return Number(second.purchases || 0) - Number(first.purchases || 0);
+  });
+  const pageSize = 12;
+  const totalCatalogPages = Math.max(1, Math.ceil(sortedProducts.length / pageSize));
+  const products = sortedProducts.slice((catalogPage - 1) * pageSize, catalogPage * pageSize);
+  const categories = [...new Set((store ? store.products : stores.flatMap((item) => item.products)).map((product) => product.category))];
   const categoryIcons = new Map(configuredCategoryEntries().map((category) => [category.name, category.icon]));
   const activeStoreCategories = [...new Set(stores.flatMap((item) => item.products.map((product) => product.category)).filter(Boolean))];
   const storeCategoryFilters = [["", "Todas", "▦"], ...activeStoreCategories.map((category) => [category, category, categoryIcons.get(category) || "▦"])];
@@ -158,6 +178,9 @@ function App() {
   const otherStores = visibleStores.filter(
     (s) => !s.featured && !featuredStoreNames.includes(s.name),
   );
+  const offerProducts = stores.flatMap((item) => item.products)
+    .filter((product) => Number(product.original_price) > Number(product.price))
+    .slice(0, 4);
   const renderStoreCards = (items, featured = false) =>
     items.map((s) => (
       <article
@@ -189,6 +212,10 @@ function App() {
         ? c.map((i) => (i.id === p.id ? { ...i, quantity: Math.min(stock, i.quantity + q) } : i))
         : [...c, { ...p, quantity: Math.min(stock, q) }];
     });
+  const toggleFavorite = (product) => {
+    const id = String(product.id);
+    setFavorites((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  };
   const total = cart.reduce((s, p) => s + p.price * p.quantity, 0);
   const logout = () => {
     setUser(null);
@@ -253,7 +280,7 @@ function App() {
               }
               aria-label="Buscar productos o tiendas"
             />
-            {store && (
+            {(store || showAllProducts) && (
               <select
                 className="category-filter"
                 value={categoryFilter}
@@ -292,10 +319,37 @@ function App() {
               onClick={() => {
                 setStore(null);
                 setShowAllProducts(false);
+                setFavoritesOnly(false);
                 setQuery("");
               }}
             >
               Tiendas
+            </button>
+            <button
+              className="nav-link"
+              onClick={() => {
+                setStore(null);
+                setShowAllProducts(true);
+                setFavoritesOnly(false);
+                setQuery("");
+                setCategoryFilter("");
+              }}
+            >
+              Todos los productos
+            </button>
+            <button
+              className="nav-link nav-favorites"
+              onClick={() => {
+                setStore(null);
+                setShowAllProducts(true);
+                setFavoritesOnly(true);
+                setQuery("");
+                setCategoryFilter("");
+              }}
+              aria-label="Ver favoritos"
+              title="Favoritos"
+            >
+              ♡ <span>{favorites.length}</span>
             </button>
             {!user && (
               <button className="nav-link" onClick={() => setLoginOpen(true)}>
@@ -360,6 +414,12 @@ function App() {
               <div className="store-grid">{renderStoreCards(featuredStores, true)}</div>
             </section>
           )}
+          {offerProducts.length > 0 && (
+            <section className="store-directory-section offers-section">
+              <div className="store-section-heading"><small>OFERTAS ACTIVAS</small><h2>Precios especiales</h2></div>
+              <div className="offer-grid">{offerProducts.map((product) => <article className="offer-card" key={product.id} onClick={() => { setStore(stores.find((item) => item.name === product.store) || null); setSelected(product); }}><img src={productImageUrl(product.image)} alt={product.name} /><div><span>Oferta</span><h3>{product.name}</h3><del>{money(product.original_price)}</del><strong>{money(product.price)}</strong></div></article>)}</div>
+            </section>
+          )}
           {(
             <section className="directory-inline-banner" aria-label="Banners de tiendas">
               <BannerSlider
@@ -388,8 +448,12 @@ function App() {
         </main>
       ) : (
         <main
-          className={`store-profile theme-${storeThemes[store.name] || "ocean"}`}
+          className={store ? `store-profile theme-${storeThemes[store.name] || "ocean"}` : "store-profile catalog-profile"}
         >
+          <div className="catalog-toolbar">
+            <div><strong>{favoritesOnly ? "Mis favoritos" : store ? `Productos de ${store.name}` : "Todos los productos"}</strong><span>{sortedProducts.length} resultados</span></div>
+            <label>Ordenar<select value={sortBy} onChange={(event) => setSortBy(event.target.value)}><option value="featured">Más populares</option><option value="newest">Más recientes</option><option value="rating">Mejor calificados</option><option value="price-asc">Menor precio</option><option value="price-desc">Mayor precio</option></select></label>
+          </div>
           <div className="shop-grid">
             {products.map((p) => (
               <article
@@ -400,6 +464,7 @@ function App() {
                 <div className="product-photo">
                   <img src={productImageUrl(p.image)} alt={p.name} />
                   {Number(p.original_price) > Number(p.price) && <span className="product-sale-badge">Oferta</span>}
+                  <button className={favorites.includes(String(p.id)) ? "like-btn active" : "like-btn"} onClick={(event) => { event.stopPropagation(); toggleFavorite(p); }} aria-label={favorites.includes(String(p.id)) ? `Quitar ${p.name} de favoritos` : `Agregar ${p.name} a favoritos`}>{favorites.includes(String(p.id)) ? "♥" : "♡"}</button>
                 </div>
                 <div className="product-info">
                   <small>{p.brand ? `${p.brand} · ` : ""}{p.category}</small>
@@ -429,9 +494,10 @@ function App() {
           </div>
           {!products.length && (
             <p className="empty-products">
-              No encontramos productos con esa búsqueda.
+              {favoritesOnly ? "Aún no tienes productos favoritos." : "No encontramos productos con esa búsqueda."}
             </p>
           )}
+          {sortedProducts.length > pageSize && <nav className="catalog-pagination" aria-label="Paginación de productos"><button disabled={catalogPage === 1} onClick={() => setCatalogPage((page) => Math.max(1, page - 1))}>Anterior</button><span>Página {catalogPage} de {totalCatalogPages}</span><button disabled={catalogPage === totalCatalogPages} onClick={() => setCatalogPage((page) => Math.min(totalCatalogPages, page + 1))}>Siguiente</button></nav>}
         </main>
       )}
       {selected && (
