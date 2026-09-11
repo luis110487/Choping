@@ -357,6 +357,20 @@ class AdminUserProvisioningTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 403)
 
+    def test_catalog_products_always_carry_a_unique_id(self):
+        """The cart matches lines by id; duplicates or None bill the wrong item."""
+        catalog = self.client.get('/api/stores').get_json()
+        ids = [product.get('id') for store in catalog for product in store['products']]
+        self.assertTrue(ids, 'el catalogo no devolvio productos')
+        self.assertNotIn(None, ids)
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_catalog_stores_always_carry_an_id(self):
+        catalog = self.client.get('/api/stores').get_json()
+        ids = [store.get('id') for store in catalog]
+        self.assertNotIn(None, ids)
+        self.assertEqual(len(ids), len(set(ids)))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -39,11 +39,11 @@ function ProductModal({ product, add, close }) {
             <div className="modal-thumbnails">
               {images.map((x, i) => (
                 <button
+                  key={i}
                   className={imageIndex === i ? "active" : ""}
                   onClick={() => setImageIndex(i)}
                 >
                   <img
-                    key={i}
                     src={productImageUrl(x)}
                     alt={`Vista ${i + 1}`}
                   />

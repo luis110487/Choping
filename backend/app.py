@@ -181,7 +181,10 @@ DEMO_PRODUCTS = [
     {'name': 'Casco urbano certificado', 'category': 'Movilidad', 'price': 210000, 'description': 'Proteccion comoda y ligera para recorridos urbanos.', 'image': 'products/moto-electrica.png', 'store': 'EcoRuedas', 'rating': 4.8},
     {'name': 'Bicicleta electrica urbana', 'category': 'Movilidad', 'price': 2800000, 'description': 'Bicicleta electrica ligera para recorridos diarios por la ciudad.', 'image': 'products/moto-electrica.png', 'store': 'EcoRuedas', 'rating': 4.7},
 ]
-for product in DEMO_PRODUCTS:
+# Every product needs a stable id: the cart matches lines by it, so products
+# without one collapse into a single line and bill the wrong item.
+for position, product in enumerate(DEMO_PRODUCTS, start=1):
+    product.update({'id': position})
     product.update({'story': f"Seleccionado para quienes buscan una compra practica en {product['category'].lower()}.", 'review': 'Excelente calidad, compra recomendada por la comunidad Choping.', 'likes': 120, 'purchases': 24, 'stock': 12, 'original_price': None, 'images': [product['image'], product['image'], product['image']]})
 
 @app.get('/api/health')
@@ -569,7 +572,7 @@ def stores():
     for p in DEMO_PRODUCTS:
         store=next((s for s in result if s['name']==p['store']),None)
         if not store:
-            store={'name':p['store'],'rating':4.8,'category':p['category'],'products':[]}; result.append(store)
+            store={'id':len(result)+1,'name':p['store'],'rating':4.8,'category':p['category'],'products':[]}; result.append(store)
         store['products'].append(p)
     return jsonify(apply_store_themes(result))
 
