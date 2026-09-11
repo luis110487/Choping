@@ -67,9 +67,9 @@ function themeStyleVars(value) {
     const color = theme.colors[key];
     if (color) vars[`--store-${key === "priceOld" ? "price-old" : key}`] = color;
   }
-  const fonts = themeFonts(value);
-  vars["--store-font-heading"] = fontStack(fonts.heading);
-  vars["--store-font-body"] = fontStack(fonts.body);
+  const chosen = theme.fonts || {};
+  if (chosen.heading) vars["--store-font-heading"] = fontStack(chosen.heading);
+  if (chosen.body) vars["--store-font-body"] = fontStack(chosen.body);
   return vars;
 }
 
@@ -79,12 +79,13 @@ const DEFAULT_PLATFORM_THEME = { background: "", fonts: {} };
 
 /** Directory look: the platform default with the admin's choices on top. */
 function platformStyleVars(theme) {
-  const fonts = { ...DEFAULT_FONTS, ...(theme?.fonts || {}) };
-  return {
-    "--page-background": theme?.background || DEFAULT_PLATFORM_BACKGROUND,
-    "--page-font-heading": fontStack(fonts.heading),
-    "--page-font-body": fontStack(fonts.body),
-  };
+  const vars = { "--page-background": theme?.background || DEFAULT_PLATFORM_BACKGROUND };
+  // Solo se emite lo que el administrador eligio: una variable en linea con el
+  // valor por defecto ganaria sobre la tipografia base de la hoja de estilos.
+  const chosen = theme?.fonts || {};
+  if (chosen.heading) vars["--page-font-heading"] = fontStack(chosen.heading);
+  if (chosen.body) vars["--page-font-body"] = fontStack(chosen.body);
+  return vars;
 }
 
 export { DEFAULT_FONTS, DEFAULT_PLATFORM_BACKGROUND, DEFAULT_PLATFORM_THEME, DEFAULT_PRESET, STORE_COLOR_FIELDS, STORE_FONTS, STORE_FONT_SLOTS, STORE_PRESETS, fontStack, normalizeTheme, platformStyleVars, presetPalette, themeClassName, themeFonts, themePalette, themeStyleVars };
