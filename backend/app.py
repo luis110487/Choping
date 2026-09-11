@@ -273,6 +273,65 @@ def create_catalog_product(store_name, data):
         db.session.rollback()
         return None, 'No fue posible guardar el producto.'
 
+def update_catalog_product(store_name, product_id, data):
+    try:
+        ensure_product_schema()
+        existing = db.session.execute(
+            text('''
+                select p.id, p.image
+                from products p
+                join stores s on s.id = p.store_id
+                where p.id = :product_id and lower(s.name) = lower(:store_name)
+                limit 1
+            '''),
+            {'product_id': product_id, 'store_name': store_name},
+        ).mappings().first()
+        if not existing:
+            return None, 'No encontramos ese producto en tu tienda.'
+        image = data.get('image', '').strip() or existing['image'] or 'products/pc-gamer.png'
+        db.session.execute(
+            text('''
+                update products
+                set name = :name, sku = :sku, brand = :brand, category = :category,
+                    description = :description, story = :story, price = :price,
+                    original_price = :original_price, stock = :stock, status = :status,
+                    variants = :variants, image = :image
+                where id = :product_id
+            '''),
+            {
+                'product_id': product_id, 'name': data['name'], 'sku': data.get('sku') or None,
+                'brand': data.get('brand') or None, 'category': data['category'],
+                'description': data.get('description', ''), 'story': data.get('story', ''),
+                'price': data['price'], 'original_price': data.get('original_price'),
+                'stock': data['stock'], 'status': data.get('status', 'active'),
+                'variants': json.dumps(data.get('variants', [])), 'image': image,
+            },
+        )
+        db.session.commit()
+        return {**data, 'id': product_id, 'image': image, 'images': [image], 'store': store_name}, None
+    except Exception:
+        db.session.rollback()
+        return None, 'No fue posible actualizar el producto.'
+
+def delete_catalog_product(store_name, product_id):
+    try:
+        deleted = db.session.execute(
+            text('''
+                delete from products p
+                using stores s
+                where p.store_id = s.id and p.id = :product_id and lower(s.name) = lower(:store_name)
+            '''),
+            {'product_id': product_id, 'store_name': store_name},
+        )
+        if not deleted.rowcount:
+            db.session.rollback()
+            return 'No encontramos ese producto en tu tienda.'
+        db.session.commit()
+        return None
+    except Exception:
+        db.session.rollback()
+        return 'No fue posible eliminar el producto.'
+
 @app.post('/api/store/product-images')
 def upload_store_product_image():
     actor = authenticated_session()
@@ -559,62 +618,73 @@ def login():
             return login_response({'email': email, 'name': email.split('@')[0], 'role': role})
     return jsonify({'error': 'Correo o contraseña incorrectos'}), 401
 
+def build_catalog_product_payload(data):
+    name = data.get('name', '').strip()
+    category = data.get('category', '').strip()
+    if not name or not category:
+        return None, 'Nombre y categoría son obligatorios.'
+    try:
+        price = float(data.get('price', 0))
+        stock = int(data.get('stock', 0))
+    except (TypeError, ValueError):
+        return None, 'Precio y stock deben ser valores válidos.'
+    if price <= 0 or stock < 0:
+        return None, 'Indica un precio mayor a cero y un stock válido.'
+    original_price_value = data.get('original_price')
+    try:
+        original_price = None if original_price_value in (None, '') else float(original_price_value)
+    except (TypeError, ValueError):
+        return None, 'El precio anterior no es válido.'
+    if original_price is not None and original_price <= price:
+        return None, 'El precio anterior debe ser mayor que el precio actual.'
+    status = str(data.get('status', 'active')).strip().lower()
+    if status not in {'active', 'inactive'}:
+        return None, 'El estado del producto no es válido.'
+    raw_variants = data.get('variants', [])
+    variants = raw_variants if isinstance(raw_variants, list) else str(raw_variants).split(',')
+    return {
+        'name': name, 'sku': data.get('sku', '').strip(), 'brand': data.get('brand', '').strip(),
+        'category': category, 'description': data.get('description', '').strip(),
+        'story': data.get('story', '').strip(), 'price': price, 'original_price': original_price,
+        'stock': stock, 'status': status, 'variants': [str(variant).strip() for variant in variants if str(variant).strip()],
+        'image': data.get('image', '').strip(),
+    }, None
+
 @app.post('/api/store/products')
 def create_store_product():
     actor = authenticated_session()
     if not actor or actor.get('role') != 'tienda':
         return jsonify({'error': 'Solo la cuenta administradora de la tienda puede crear productos.'}), 403
-    data = request.get_json(silent=True) or {}
-    name = data.get('name', '').strip()
-    category = data.get('category', '').strip()
-    description = data.get('description', '').strip()
-    if not name or not category:
-        return jsonify({'error': 'Nombre y categoría son obligatorios.'}), 400
-    try:
-        price = float(data.get('price', 0))
-    except (TypeError, ValueError):
-        price = 0
-    if price <= 0:
-        return jsonify({'error': 'Indica un precio mayor a cero.'}), 400
-    try:
-        stock = int(data.get('stock', 0))
-    except (TypeError, ValueError):
-        stock = -1
-    if stock < 0:
-        return jsonify({'error': 'El stock debe ser cero o un número mayor.'}), 400
-    original_price_value = data.get('original_price')
-    if original_price_value in (None, ''):
-        original_price = None
-    else:
-        try:
-            original_price = float(original_price_value)
-        except (TypeError, ValueError):
-            return jsonify({'error': 'El precio anterior no es válido.'}), 400
-        if original_price <= price:
-            return jsonify({'error': 'El precio anterior debe ser mayor que el precio actual.'}), 400
-    status = data.get('status', 'active').strip().lower()
-    if status not in {'active', 'inactive'}:
-        return jsonify({'error': 'El estado del producto no es válido.'}), 400
-    raw_variants = data.get('variants', [])
-    variants = raw_variants if isinstance(raw_variants, list) else str(raw_variants).split(',')
-    variants = [str(variant).strip() for variant in variants if str(variant).strip()]
-    product, error = create_catalog_product(actor.get('store_name', ''), {
-        'name': name,
-        'sku': data.get('sku', '').strip(),
-        'brand': data.get('brand', '').strip(),
-        'category': category,
-        'description': description,
-        'story': data.get('story', '').strip(),
-        'price': price,
-        'original_price': original_price,
-        'stock': stock,
-        'status': status,
-        'variants': variants,
-        'image': data.get('image', '').strip(),
-    })
+    payload, validation_error = build_catalog_product_payload(request.get_json(silent=True) or {})
+    if validation_error:
+        return jsonify({'error': validation_error}), 400
+    product, error = create_catalog_product(actor.get('store_name', ''), payload)
     if error:
         return jsonify({'error': error}), 404 if 'tienda' in error.lower() else 500
     return jsonify({'product': product}), 201
+
+@app.put('/api/store/products/<int:product_id>')
+def update_store_product(product_id):
+    actor = authenticated_session()
+    if not actor or actor.get('role') != 'tienda':
+        return jsonify({'error': 'Solo la cuenta administradora de la tienda puede editar productos.'}), 403
+    payload, validation_error = build_catalog_product_payload(request.get_json(silent=True) or {})
+    if validation_error:
+        return jsonify({'error': validation_error}), 400
+    product, error = update_catalog_product(actor.get('store_name', ''), product_id, payload)
+    if error:
+        return jsonify({'error': error}), 404 if 'producto' in error.lower() else 500
+    return jsonify({'product': product})
+
+@app.delete('/api/store/products/<int:product_id>')
+def delete_store_product(product_id):
+    actor = authenticated_session()
+    if not actor or actor.get('role') != 'tienda':
+        return jsonify({'error': 'Solo la cuenta administradora de la tienda puede eliminar productos.'}), 403
+    error = delete_catalog_product(actor.get('store_name', ''), product_id)
+    if error:
+        return jsonify({'error': error}), 404 if 'producto' in error.lower() else 500
+    return '', 204
 
 @app.post('/api/admin/users')
 def create_admin_user():

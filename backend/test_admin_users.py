@@ -289,6 +289,28 @@ class AdminUserProvisioningTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertTrue(response.get_json()['image'].startswith('uploads/'))
 
+    @patch('app.update_catalog_product', create=True)
+    def test_store_user_can_update_only_its_product(self, mock_update_product):
+        db.session.add(LocalUser(
+            name='Casa Viva', email='casaviva@gmail.com',
+            password_hash=generate_password_hash('Clave123'), role='tienda', store_name='Casa Viva',
+        ))
+        db.session.commit()
+        mock_update_product.return_value = ({
+            'id': 101, 'name': 'Mesa actualizada', 'category': 'Hogar', 'price': 190000,
+            'stock': 5, 'status': 'active', 'variants': [], 'store': 'Casa Viva',
+        }, None)
+        login = self.client.post('/api/auth/login', json={'email': 'casaviva@gmail.com', 'password': 'Clave123'})
+        response = self.client.put(
+            '/api/store/products/101',
+            headers={'Authorization': f"Bearer {login.get_json()['access_token']}"},
+            json={'name': 'Mesa actualizada', 'category': 'Hogar', 'price': 190000, 'stock': 5},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['product']['name'], 'Mesa actualizada')
+        mock_update_product.assert_called_once()
+
 
 if __name__ == '__main__':
     unittest.main()
