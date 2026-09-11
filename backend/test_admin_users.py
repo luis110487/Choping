@@ -240,10 +240,14 @@ class AdminUserProvisioningTests(unittest.TestCase):
             headers={'Authorization': f"Bearer {login.get_json()['access_token']}"},
             json={
                 'name': 'Mesa auxiliar',
+                'sku': 'CASA-MESA-01',
+                'brand': 'Casa Viva',
                 'category': 'Hogar',
+                'variants': 'Roble, Blanco',
                 'price': 180000,
                 'original_price': 220000,
                 'stock': 8,
+                'status': 'inactive',
                 'description': 'Mesa de madera',
             },
         )
@@ -252,6 +256,9 @@ class AdminUserProvisioningTests(unittest.TestCase):
         self.assertEqual(response.get_json()['product']['store'], 'Casa Viva')
         self.assertEqual(mock_create_product.call_args.args[1]['stock'], 8)
         self.assertEqual(mock_create_product.call_args.args[1]['original_price'], 220000)
+        self.assertEqual(mock_create_product.call_args.args[1]['sku'], 'CASA-MESA-01')
+        self.assertEqual(mock_create_product.call_args.args[1]['variants'], ['Roble', 'Blanco'])
+        self.assertEqual(mock_create_product.call_args.args[1]['status'], 'inactive')
 
     def test_store_user_can_upload_a_product_image(self):
         db.session.add(LocalUser(

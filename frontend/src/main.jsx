@@ -402,7 +402,7 @@ function App() {
                   {Number(p.original_price) > Number(p.price) && <span className="product-sale-badge">Oferta</span>}
                 </div>
                 <div className="product-info">
-                  <small>{p.category}</small>
+                  <small>{p.brand ? `${p.brand} · ` : ""}{p.category}</small>
                   <h2>{p.name}</h2>
                   <Stars value={p.rating} />
                   <p>{p.description}</p>
@@ -577,7 +577,7 @@ function ProductModal({ product, add, close }) {
             </div>
           </div>
           <div className="modal-info">
-            <small>{product.category}</small>
+            <small>{product.brand ? `${product.brand} · ` : ""}{product.category}{product.sku ? ` · ${product.sku}` : ""}</small>
             <h2>{product.name}</h2>
             <Stars value={product.rating} />
             <p>{product.description}</p>
@@ -591,6 +591,7 @@ function ProductModal({ product, add, close }) {
             </p>
             <h3>Historia del producto</h3>
             <p>{product.story}</p>
+            {product.variants?.length > 0 && <p className="product-variants"><b>Variantes:</b> {product.variants.join(", ")}</p>}
             <div className="modal-buy">
               <div className="quantity-control">
                 <button onClick={() => setQ(Math.max(1, q - 1))}>−</button>
@@ -1191,7 +1192,7 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, viewStore, clo
   ];
   const [tab, setTab] = useState("home");
   const [addingProduct, setAddingProduct] = useState(false);
-  const [productDraft, setProductDraft] = useState({ name: "", category: store?.category || configuredCategories()[0], price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
+  const [productDraft, setProductDraft] = useState({ name: "", sku: "", brand: "", category: store?.category || configuredCategories()[0], variants: "", price: "", original_price: "", stock: "1", status: "active", description: "", story: "", image: "" });
   const [productMessage, setProductMessage] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const products = store?.products || [];
@@ -1246,7 +1247,7 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, viewStore, clo
     event.preventDefault();
     try {
       await createProduct(productDraft);
-      setProductDraft({ name: "", category: store?.category || configuredCategories()[0], price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
+      setProductDraft({ name: "", sku: "", brand: "", category: store?.category || configuredCategories()[0], variants: "", price: "", original_price: "", stock: "1", status: "active", description: "", story: "", image: "" });
       setAddingProduct(false);
       setProductMessage("Producto creado y publicado en tu catálogo.");
     } catch (error) {
@@ -1270,7 +1271,7 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, viewStore, clo
         <div className="store-admin-main">
           <button className="modal-close" onClick={close}>×</button>
           <header className="store-admin-header"><div><small>MI TIENDA</small><h1>¡Hola!</h1><p>Gestiona {store?.name || "tu tienda"} desde un solo lugar.</p></div><div className="store-admin-account"><span>{store?.name?.slice(0, 1) || "T"}</span><strong>{store?.name || "Mi tienda"}</strong></div></header>
-          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras confirmadas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategories}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => { setTab("products"); showProductForm(); }}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`} onClick={() => setTab("products")}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark"><span>{store?.name?.slice(0, 1) || "T"}</span></div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
+          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras confirmadas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategories}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => { setTab("products"); showProductForm(); }}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>{product.status === "inactive" ? "Inactivo" : "Publicado"}</span><button aria-label={`Editar ${product.name}`} onClick={() => setTab("products")}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark"><span>{store?.name?.slice(0, 1) || "T"}</span></div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
           {tab === "products" && (
             <div className="store-admin-content">
               <div className="store-admin-title">
@@ -1280,10 +1281,14 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, viewStore, clo
               {addingProduct && (
                 <form className="store-product-form" onSubmit={saveProduct}>
                   <label>Nombre del producto<input value={productDraft.name} onChange={(event) => setProductDraft({ ...productDraft, name: event.target.value })} required /></label>
+                  <label>SKU<input value={productDraft.sku} onChange={(event) => setProductDraft({ ...productDraft, sku: event.target.value })} placeholder="TDS-001" /></label>
+                  <label>Marca<input value={productDraft.brand} onChange={(event) => setProductDraft({ ...productDraft, brand: event.target.value })} placeholder="Marca del producto" /></label>
                   <label>Categoría<select value={productDraft.category} onChange={(event) => setProductDraft({ ...productDraft, category: event.target.value })} required>{categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
                   <label>Precio<input type="number" min="1" value={productDraft.price} onChange={(event) => setProductDraft({ ...productDraft, price: event.target.value })} required /></label>
                   <label>Precio anterior (tachado)<input type="number" min="1" value={productDraft.original_price} onChange={(event) => setProductDraft({ ...productDraft, original_price: event.target.value })} placeholder="Opcional" /></label>
                   <label>Stock disponible<input type="number" min="0" step="1" value={productDraft.stock} onChange={(event) => setProductDraft({ ...productDraft, stock: event.target.value })} required /></label>
+                  <label>Estado<select value={productDraft.status} onChange={(event) => setProductDraft({ ...productDraft, status: event.target.value })}><option value="active">Publicado</option><option value="inactive">Borrador / inactivo</option></select></label>
+                  <label className="store-product-wide">Variantes<input value={productDraft.variants} onChange={(event) => setProductDraft({ ...productDraft, variants: event.target.value })} placeholder="Ej.: Rojo, Azul, Talla M" /></label>
                   <label>URL de la imagen<input type="url" value={/^(https?:)?\/\//i.test(productDraft.image) ? productDraft.image : ""} onChange={(event) => setProductDraft({ ...productDraft, image: event.target.value })} placeholder="https://ejemplo.com/producto.jpg" /></label>
                   <label className="store-product-image-drop store-product-wide" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); uploadProductImage(event.dataTransfer.files[0]); }}>
                     <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => uploadProductImage(event.target.files[0])} />
@@ -1298,7 +1303,7 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, viewStore, clo
               )}
               {productMessage && <p className="store-product-message">{productMessage}</p>}
               <div className="store-admin-list">
-                {products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{product.category} · {money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`}>✎</button><button aria-label={`Eliminar ${product.name}`}>⌫</button></div>) : <div className="store-admin-empty"><strong>No hay productos aún</strong><span>Agrega el primer producto de tu catálogo.</span></div>}
+                {products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{product.category} · {money(product.price)}</small></div><span>{product.status === "inactive" ? "Inactivo" : "Publicado"}</span><button aria-label={`Editar ${product.name}`}>✎</button><button aria-label={`Eliminar ${product.name}`}>⌫</button></div>) : <div className="store-admin-empty"><strong>No hay productos aún</strong><span>Agrega el primer producto de tu catálogo.</span></div>}
               </div>
             </div>
           )}
