@@ -35,7 +35,14 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 app.config['PRODUCT_UPLOAD_FOLDER'] = os.path.join(app.static_folder, 'img', 'uploads')
 db = SQLAlchemy(app)
-CORS(app, origins=required_in_production('FRONTEND_ORIGIN', '*'))
+def allowed_origins():
+    """Accept a comma-separated list, so preview deployments and a custom
+    domain can coexist with the main Vercel URL."""
+    raw = required_in_production('FRONTEND_ORIGIN', '*')
+    origins = [origin.strip().rstrip('/') for origin in raw.split(',') if origin.strip()]
+    return origins or '*'
+
+CORS(app, origins=allowed_origins())
 
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)

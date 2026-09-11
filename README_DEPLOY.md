@@ -8,7 +8,9 @@ Crear un Web Service apuntando a la carpeta `backend`.
 - Start: `gunicorn app:app`
 - `DATABASE_URL`: copiar la cadena de conexión PostgreSQL de Supabase, preferiblemente la conexión pooled.
 - `SECRET_KEY`: valor aleatorio. **Obligatorio**: sin el, el servicio no arranca en Render.
-- `FRONTEND_ORIGIN`: URL final de Vercel. **Obligatorio**: evita dejar CORS abierto a `*`.
+- `FRONTEND_ORIGIN`: URL final de Vercel, por ejemplo `https://choping-one.vercel.app`.
+  **Obligatorio**: evita dejar CORS abierto a `*`. Admite varios origenes separados
+  por coma para las preview de Vercel o un dominio propio.
 
 Health check: `/api/health`
 
