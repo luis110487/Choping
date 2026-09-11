@@ -7,8 +7,8 @@ Crear un Web Service apuntando a la carpeta `backend`.
 - Build: `pip install -r requirements.txt`
 - Start: `gunicorn app:app`
 - `DATABASE_URL`: copiar la cadena de conexión PostgreSQL de Supabase, preferiblemente la conexión pooled.
-- `SECRET_KEY`: valor aleatorio.
-- `FRONTEND_ORIGIN`: URL final de Vercel.
+- `SECRET_KEY`: valor aleatorio. **Obligatorio**: sin el, el servicio no arranca en Render.
+- `FRONTEND_ORIGIN`: URL final de Vercel. **Obligatorio**: evita dejar CORS abierto a `*`.
 
 Health check: `/api/health`
 

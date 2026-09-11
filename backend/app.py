@@ -12,14 +12,29 @@ from sqlalchemy import text
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+IS_PRODUCTION = os.environ.get('FLASK_ENV', 'production') == 'production' and bool(os.environ.get('RENDER'))
+
+def required_in_production(name, development_default):
+    """Return an environment value, refusing unsafe defaults in production.
+
+    Render sets RENDER=true, so a missing SECRET_KEY or FRONTEND_ORIGIN stops
+    the deploy instead of silently shipping a shared signing key or open CORS.
+    """
+    value = os.environ.get(name, '').strip()
+    if value:
+        return value
+    if IS_PRODUCTION:
+        raise RuntimeError(f'{name} es obligatorio en produccion.')
+    return development_default
+
 app = Flask(__name__, static_folder='static', static_url_path='/static')
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-only-change-me')
+app.config['SECRET_KEY'] = required_in_production('SECRET_KEY', 'dev-only-change-me')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///encuentra.db').replace('postgres://', 'postgresql://', 1)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 app.config['PRODUCT_UPLOAD_FOLDER'] = os.path.join(app.static_folder, 'img', 'uploads')
 db = SQLAlchemy(app)
-CORS(app, origins=os.environ.get('FRONTEND_ORIGIN', '*'))
+CORS(app, origins=required_in_production('FRONTEND_ORIGIN', '*'))
 
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
