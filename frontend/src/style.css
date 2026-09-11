@@ -461,3 +461,10 @@ button.category-new{flex:0 0 auto;padding:0 14px;border:1px solid #a9c9f7;border
 button.category-new:hover{background:#f3f8ff;border-color:var(--choping-blue)}
 .category-new-row{margin-top:8px}
 .category-new-row .btn{flex:0 0 auto;padding:0 18px;font-size:13px}
+
+/* --- Acciones de cada producto ---------------------------------------- */
+button.store-row-action{padding:6px 10px;border:1px solid var(--choping-border);border-radius:8px;background:var(--choping-white);color:var(--choping-dark);font-size:15px;line-height:1;cursor:pointer;transition:all .2s ease}
+button.store-row-action:hover{border-color:var(--choping-blue);color:var(--choping-blue);background:#f4f8ff}
+button.store-row-action.danger:hover{border-color:#c81e4a;color:#c81e4a;background:#fdeef3}
+button.store-delete-confirm{background:#c81e4a;border:1px solid #c81e4a}
+button.store-delete-confirm:hover{background:#a8173c}

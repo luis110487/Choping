@@ -613,6 +613,47 @@ class AdminUserProvisioningTests(unittest.TestCase):
             403,
         )
 
+    def test_product_payload_validation_is_shared(self):
+        """Create y update comparten validacion: no pueden separarse."""
+        from app import parse_product_payload
+
+        valid, error = parse_product_payload({
+            'name': 'Taladro', 'category': 'Herramientas', 'price': '189000', 'stock': '4',
+        })
+        self.assertIsNone(error)
+        self.assertEqual(valid['price'], 189000.0)
+        self.assertEqual(valid['stock'], 4)
+
+        for payload, reason in (
+            ({'name': '', 'category': 'Herramientas', 'price': 1, 'stock': 1}, 'sin nombre'),
+            ({'name': 'X', 'category': '', 'price': 1, 'stock': 1}, 'sin categoria'),
+            ({'name': 'X', 'category': 'Y', 'price': 0, 'stock': 1}, 'precio cero'),
+            ({'name': 'X', 'category': 'Y', 'price': 10, 'stock': -1}, 'stock negativo'),
+            ({'name': 'X', 'category': 'Y', 'price': 10, 'stock': 1, 'original_price': 5}, 'anterior menor'),
+        ):
+            _, error = parse_product_payload(payload)
+            self.assertIsNotNone(error, reason)
+
+    def test_product_edit_and_delete_need_the_owning_store(self):
+        headers = self.store_session(store_name='Casa Viva', email='casaviva@gmail.com')
+        body = {'name': 'X', 'category': 'Hogar', 'price': 1000, 'stock': 1}
+
+        # Sin sesion de tienda no se puede ni editar ni borrar.
+        self.assertEqual(self.client.put('/api/store/products/1', json=body).status_code, 403)
+        self.assertEqual(self.client.delete('/api/store/products/1').status_code, 403)
+
+        client_token = access_token_for({'email': 'c@x.c', 'role': 'cliente', 'name': 'Cli'})
+        client_headers = {'Authorization': f'Bearer {client_token}'}
+        self.assertEqual(self.client.put('/api/store/products/1', headers=client_headers, json=body).status_code, 403)
+        self.assertEqual(self.client.delete('/api/store/products/1', headers=client_headers).status_code, 403)
+
+        # Con sesion valida, la validacion corre antes de tocar la base.
+        self.assertEqual(
+            self.client.put('/api/store/products/1', headers=headers,
+                            json={'name': '', 'category': 'Hogar', 'price': 1, 'stock': 1}).status_code,
+            400,
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

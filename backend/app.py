@@ -1282,29 +1282,24 @@ def login():
             return login_response({'email': email, 'name': email.split('@')[0], 'role': role})
     return jsonify({'error': 'Correo o contraseña incorrectos'}), 401
 
-@app.post('/api/store/products')
-def create_store_product():
-    actor = authenticated_session()
-    if not actor or actor.get('role') != 'tienda':
-        return jsonify({'error': 'Solo la cuenta administradora de la tienda puede crear productos.'}), 403
-    data = request.get_json(silent=True) or {}
+def parse_product_payload(data):
+    """Validate a product, returning (fields, error). Shared by create and edit."""
     name = data.get('name', '').strip()
     category = data.get('category', '').strip()
-    description = data.get('description', '').strip()
     if not name or not category:
-        return jsonify({'error': 'Nombre y categoría son obligatorios.'}), 400
+        return None, 'Nombre y categoría son obligatorios.'
     try:
         price = float(data.get('price', 0))
     except (TypeError, ValueError):
         price = 0
     if price <= 0:
-        return jsonify({'error': 'Indica un precio mayor a cero.'}), 400
+        return None, 'Indica un precio mayor a cero.'
     try:
         stock = int(data.get('stock', 0))
     except (TypeError, ValueError):
         stock = -1
     if stock < 0:
-        return jsonify({'error': 'El stock debe ser cero o un número mayor.'}), 400
+        return None, 'El stock debe ser cero o un número mayor.'
     original_price_value = data.get('original_price')
     if original_price_value in (None, ''):
         original_price = None
@@ -1312,19 +1307,98 @@ def create_store_product():
         try:
             original_price = float(original_price_value)
         except (TypeError, ValueError):
-            return jsonify({'error': 'El precio anterior no es válido.'}), 400
+            return None, 'El precio anterior no es válido.'
         if original_price <= price:
-            return jsonify({'error': 'El precio anterior debe ser mayor que el precio actual.'}), 400
-    product, error = create_catalog_product(actor.get('store_name', ''), {
+            return None, 'El precio anterior debe ser mayor que el precio actual.'
+    return {
         'name': name,
         'category': category,
-        'description': description,
+        'description': data.get('description', '').strip(),
         'story': data.get('story', '').strip(),
         'price': price,
         'original_price': original_price,
         'stock': stock,
         'image': data.get('image', '').strip(),
-    })
+    }, None
+
+
+def owned_product(actor, product_id):
+    """Find a product the caller may edit, returning (row, error, status)."""
+    if not os.environ.get('DATABASE_URL'):
+        return None, 'Esta accion requiere la base de datos configurada.', 503
+    query = (
+        'select p.id, s.name as store_name from products p '
+        'join stores s on s.id = p.store_id where p.id = :id'
+    )
+    try:
+        row = db.session.execute(text(query), {'id': product_id}).mappings().first()
+    except Exception:
+        db.session.rollback()
+        return None, 'No fue posible consultar el producto.', 500
+    if not row:
+        return None, 'No encontramos ese producto.', 404
+    if actor.get('role') in {'admin', 'superadmin'}:
+        return row, None, 200
+    own = (actor.get('store_name') or '').strip().lower()
+    if row['store_name'].lower() != own:
+        return None, 'Solo puedes modificar productos de tu tienda.', 403
+    return row, None, 200
+
+
+@app.put('/api/store/products/<int:product_id>')
+def update_store_product(product_id):
+    actor = authenticated_session()
+    if not actor or actor.get('role') not in {'tienda', 'admin', 'superadmin'}:
+        return jsonify({'error': 'Solo la cuenta administradora de la tienda puede modificar productos.'}), 403
+    fields, error = parse_product_payload(request.get_json(silent=True) or {})
+    if error:
+        return jsonify({'error': error}), 400
+    row, error, status = owned_product(actor, product_id)
+    if error:
+        return jsonify({'error': error}), status
+    update = (
+        'update products set name = :name, category = :category, '
+        'description = :description, story = :story, price = :price, '
+        'original_price = :original_price, stock = :stock, image = :image '
+        'where id = :id'
+    )
+    try:
+        ensure_product_schema()
+        db.session.execute(text(update), {**fields, 'id': product_id})
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible guardar los cambios.'}), 500
+    return jsonify({'product': {**fields, 'id': product_id, 'store': row['store_name']}})
+
+
+@app.delete('/api/store/products/<int:product_id>')
+def delete_store_product(product_id):
+    actor = authenticated_session()
+    if not actor or actor.get('role') not in {'tienda', 'admin', 'superadmin'}:
+        return jsonify({'error': 'Solo la cuenta administradora de la tienda puede eliminar productos.'}), 403
+    row, error, status = owned_product(actor, product_id)
+    if error:
+        return jsonify({'error': error}), status
+    try:
+        db.session.execute(text('delete from product_images where product_id = :id'), {'id': product_id})
+        db.session.execute(text('delete from products where id = :id'), {'id': product_id})
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible eliminar el producto.'}), 500
+    return jsonify({'deleted': product_id})
+
+
+@app.post('/api/store/products')
+def create_store_product():
+    actor = authenticated_session()
+    if not actor or actor.get('role') != 'tienda':
+        return jsonify({'error': 'Solo la cuenta administradora de la tienda puede crear productos.'}), 403
+    fields, error = parse_product_payload(request.get_json(silent=True) or {})
+    if error:
+        return jsonify({'error': error}), 400
+    product, error = create_catalog_product(actor.get('store_name', ''), fields)
     if error:
         return jsonify({'error': error}), 404 if 'tienda' in error.lower() else 500
     return jsonify({'product': product}), 201

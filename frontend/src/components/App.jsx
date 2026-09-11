@@ -273,6 +273,38 @@ function App() {
     );
     return product;
   };
+  const editStoreProduct = async (productId, draft) => {
+    const authToken = localStorage.getItem("choping-auth-token");
+    if (!authToken) throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
+    const response = await fetch(`${API}/api/store/products/${productId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify(draft),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "No fue posible guardar los cambios.");
+    const saved = data.product;
+    const apply = (item) =>
+      item.name === saved.store
+        ? { ...item, products: item.products.map((p) => (p.id === saved.id ? { ...p, ...saved } : p)) }
+        : item;
+    setStores((current) => current.map(apply));
+    setStore((current) => (current ? apply(current) : current));
+    return saved;
+  };
+  const removeStoreProduct = async (productId) => {
+    const authToken = localStorage.getItem("choping-auth-token");
+    if (!authToken) throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
+    const response = await fetch(`${API}/api/store/products/${productId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "No fue posible eliminar el producto.");
+    const drop = (item) => ({ ...item, products: item.products.filter((p) => p.id !== productId) });
+    setStores((current) => current.map(drop));
+    setStore((current) => (current ? drop(current) : current));
+  };
   const createProductCategory = async (name) => {
     const authToken = localStorage.getItem("choping-auth-token");
     if (!authToken) throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
@@ -665,6 +697,8 @@ function App() {
           updateStore={updateStoreProfile}
           productCategories={productCategories}
           createCategory={createProductCategory}
+          editProduct={editStoreProduct}
+          removeProduct={removeStoreProduct}
           theme={normalizeTheme(storeThemes[store.name])}
           media={store?.media || { logo: "", banners: [] }}
           setMedia={(media) => {

@@ -4,10 +4,37 @@ import { configuredCategories } from "../lib/catalog";
 import { StoreThemeStudio } from "./StoreThemeStudio";
 import { PasswordModal } from "./PasswordModal";
 
-function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, createProduct, updateStore, productCategories = [], createCategory, viewStore, close }) {
+function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, createProduct, updateStore, productCategories = [], createCategory, editProduct, removeProduct, viewStore, close }) {
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [removingProduct, setRemovingProduct] = useState(null);
   const [newCategory, setNewCategory] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [categoryError, setCategoryError] = useState("");
+  const startEditing = (product) => {
+    setEditingProduct(product.id);
+    setProductDraft({
+      name: product.name || "",
+      category: product.category || "",
+      price: String(product.price ?? ""),
+      original_price: product.original_price ? String(product.original_price) : "",
+      stock: String(product.stock ?? 0),
+      description: product.description || "",
+      story: product.story || "",
+      image: product.image || "",
+    });
+    setProductMessage("");
+    setAddingProduct(true);
+    setTab("products");
+  };
+  const deleteProduct = async (product) => {
+    setProductMessage("");
+    try {
+      await removeProduct(product.id);
+      setRemovingProduct(null);
+    } catch (error) {
+      setProductMessage(error.message || "No fue posible eliminar el producto.");
+    }
+  };
   const addCategory = async () => {
     setCategoryError("");
     try {
@@ -66,7 +93,7 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
     ? (products.reduce((total, product) => total + Number(product.rating || 0), 0) / products.length).toFixed(1)
     : "0.0";
   const productCategoryCount = new Set(products.map((product) => product.category)).size;
-  const showProductForm = () => { setAddingProduct(true); setProductMessage(""); };
+  const showProductForm = () => { setEditingProduct(null); setProductDraft({ name: "", category: "", price: "", original_price: "", stock: "1", description: "", story: "", image: "" }); setAddingProduct(true); setProductMessage(""); };
   const uploadProductImage = async (file) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -99,13 +126,22 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
   const saveProduct = async (event) => {
     event.preventDefault();
     try {
-      await createProduct(productDraft);
+      if (editingProduct) await editProduct(editingProduct, productDraft);
+      else await createProduct(productDraft);
       setProductDraft({ name: "", category: "", price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
       setAddingProduct(false);
-      setProductMessage("Producto creado y publicado en tu catálogo.");
+      setProductMessage(
+        editingProduct ? "Cambios guardados." : "Producto creado y publicado en tu catálogo.",
+      );
+      setEditingProduct(null);
     } catch (error) {
-      setProductMessage(error.message || "No fue posible crear el producto.");
+      setProductMessage(error.message || "No fue posible guardar el producto.");
     }
+  };
+  const closeProductForm = () => {
+    setAddingProduct(false);
+    setEditingProduct(null);
+    setProductDraft({ name: "", category: "", price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
   };
   return (
     <div className="overlay store-admin-overlay">
@@ -124,7 +160,7 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
         <div className="store-admin-main">
           <button className="modal-close" onClick={close}>×</button>
           <header className="store-admin-header"><div><small>MI TIENDA</small><h1>¡Hola!</h1><p>Gestiona {store?.name || "tu tienda"} desde un solo lugar.</p></div><div className="store-admin-account"><span>{store?.name?.slice(0, 1) || "T"}</span><strong>{store?.name || "Mi tienda"}</strong></div></header>
-          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras confirmadas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategoryCount}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => { setTab("products"); showProductForm(); }}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`} onClick={() => setTab("products")}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark"><span>{store?.name?.slice(0, 1) || "T"}</span></div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
+          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras confirmadas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategoryCount}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => { setTab("products"); showProductForm(); }}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>Activo</span><button className="store-row-action" aria-label={`Editar ${product.name}`} title="Editar" onClick={() => startEditing(product)}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark"><span>{store?.name?.slice(0, 1) || "T"}</span></div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
           {tab === "products" && (
             <div className="store-admin-content">
               <div className="store-admin-title">
@@ -147,12 +183,12 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
                   {productDraft.image && <img className="store-product-preview store-product-wide" src={productImageUrl(productDraft.image)} alt="Vista previa del producto" />}
                   <label className="store-product-wide">Descripción<textarea value={productDraft.description} onChange={(event) => setProductDraft({ ...productDraft, description: event.target.value })} required /></label>
                   <label className="store-product-wide">Historia del producto<textarea value={productDraft.story} onChange={(event) => setProductDraft({ ...productDraft, story: event.target.value })} /></label>
-                  <div className="store-product-form-actions"><button className="btn" disabled={uploadingImage}>{uploadingImage ? "Cargando imagen..." : "Guardar producto"}</button><button type="button" onClick={() => setAddingProduct(false)}>Cancelar</button></div>
+                  <div className="store-product-form-actions"><button className="btn" disabled={uploadingImage}>{uploadingImage ? "Cargando imagen..." : editingProduct ? "Guardar cambios" : "Guardar producto"}</button><button type="button" onClick={closeProductForm}>Cancelar</button></div>
                 </form>
               )}
               {productMessage && <p className="store-product-message">{productMessage}</p>}
               <div className="store-admin-list">
-                {products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{product.category} · {money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`}>✎</button><button aria-label={`Eliminar ${product.name}`}>⌫</button></div>) : <div className="store-admin-empty"><strong>No hay productos aún</strong><span>Agrega el primer producto de tu catálogo.</span></div>}
+                {products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{product.category} · {money(product.price)}</small></div><span>Activo</span><button className="store-row-action" aria-label={`Editar ${product.name}`} title="Editar" onClick={() => startEditing(product)}>✎</button><button className="store-row-action danger" aria-label={`Eliminar ${product.name}`} title="Eliminar" onClick={() => setRemovingProduct(product)}>⌫</button></div>) : <div className="store-admin-empty"><strong>No hay productos aún</strong><span>Agrega el primer producto de tu catálogo.</span></div>}
               </div>
             </div>
           )}
@@ -224,6 +260,23 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
             </div>
           )}
           {tab === "settings" && <StoreThemeStudio store={store} theme={theme} setTheme={setTheme} media={media} setMedia={setMedia} />}
+          {removingProduct && (
+            <div className="overlay review-overlay">
+              <section className="cart-modal review-modal">
+                <div className="cart-modal-content">
+                  <small>ELIMINAR PRODUCTO</small>
+                  <h2>{removingProduct.name}</h2>
+                  <p>Se quitará de tu catálogo y dejará de verse en la tienda. Esta acción no se puede deshacer.</p>
+                  <button className="btn store-delete-confirm" onClick={() => deleteProduct(removingProduct)}>
+                    Sí, eliminar
+                  </button>
+                  <button type="button" className="nav-link" onClick={() => setRemovingProduct(null)}>
+                    Cancelar
+                  </button>
+                </div>
+              </section>
+            </div>
+          )}
           {passwordOpen && <PasswordModal close={() => setPasswordOpen(false)} />}
         </div>
       </section>
