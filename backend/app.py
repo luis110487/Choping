@@ -246,7 +246,9 @@ def database_catalog(include_pending=False):
                 'city': row['city'],
                 'description': row['description'],
                 'rating': float(row['rating'] or 0),
-                'approved': row['approved'] if 'approved' in row else True,
+                # Normalized: SQLite yields 0/1 and NULL is possible, so identity
+                # checks against False are not reliable downstream.
+                'approved': bool(row['approved']) if 'approved' in row else True,
                 'products': [],
             }
             stores_by_id[row['id']] = store
@@ -563,9 +565,54 @@ def upload_store_product_image():
         return jsonify({'error': error}), 502
     return jsonify({'image': image}), 201
 
+def visible_pending_catalog(actor):
+    """Pending stores are not public: only staff, or the owner of that store.
+
+    Returns (catalog, None) or (None, None) when the database is unavailable.
+    """
+    catalog = database_catalog(True)
+    if catalog is None:
+        return None, None
+    if actor and actor.get('role') in {'admin', 'superadmin'}:
+        return catalog, None
+    own = (actor or {}).get('store_name', '').strip().lower() if actor else ''
+    return [
+        store for store in catalog
+        if store.get('approved', True) or (own and store.get('name', '').lower() == own)
+    ], None
+
+
+@app.put('/api/admin/stores/<path:name>/approval')
+def set_store_approval(name):
+    actor = authenticated_actor()
+    if not actor:
+        return jsonify({'error': 'Solo un administrador puede aprobar tiendas.'}), 403
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data.get('approved'), bool):
+        return jsonify({'error': 'Indica si la tienda queda aprobada o no.'}), 400
+    if not os.environ.get('DATABASE_URL'):
+        return jsonify({'error': 'La aprobacion requiere la base de datos configurada.'}), 503
+    try:
+        result = db.session.execute(
+            text('update stores set approved = :approved where lower(name) = lower(:name)'),
+            {'approved': data['approved'], 'name': name},
+        )
+        if not result.rowcount:
+            db.session.rollback()
+            return jsonify({'error': 'No encontramos esa tienda.'}), 404
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible actualizar la tienda.'}), 500
+    return jsonify({'store': name, 'approved': data['approved']})
+
+
 @app.get('/api/stores')
 def stores():
-    catalog = database_catalog(request.args.get('include_pending') == 'true')
+    if request.args.get('include_pending') == 'true':
+        catalog, _ = visible_pending_catalog(authenticated_session())
+    else:
+        catalog = database_catalog(False)
     if catalog is not None:
         return jsonify(apply_store_themes(catalog))
     result=[]

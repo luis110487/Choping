@@ -11,7 +11,7 @@ os.environ['SUPERADMIN_PASSWORD'] = 'test-superadmin-password'
 os.environ['SUPABASE_URL'] = 'https://example.supabase.co'
 os.environ['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-role-key'
 
-from app import LocalUser, app, db
+from app import LocalUser, access_token_for, app, db, visible_pending_catalog
 
 
 class AdminUserProvisioningTests(unittest.TestCase):
@@ -370,6 +370,45 @@ class AdminUserProvisioningTests(unittest.TestCase):
         ids = [store.get('id') for store in catalog]
         self.assertNotIn(None, ids)
         self.assertEqual(len(ids), len(set(ids)))
+
+    def test_only_staff_can_approve_a_store(self):
+        headers = self.store_session()
+        rejected = self.client.put('/api/admin/stores/Casa%20Viva/approval', headers=headers, json={'approved': True})
+        self.assertEqual(rejected.status_code, 403)
+
+        anonymous = self.client.put('/api/admin/stores/Casa%20Viva/approval', json={'approved': True})
+        self.assertEqual(anonymous.status_code, 403)
+
+    def test_approval_requires_an_explicit_boolean(self):
+        headers = {'Authorization': f"Bearer {access_token_for({'email': 'a@b.c', 'role': 'superadmin', 'name': 'A'})}"}
+        response = self.client.put('/api/admin/stores/Casa%20Viva/approval', headers=headers, json={'approved': 'si'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_pending_stores_are_not_public(self):
+        """A pending store must not leak to anonymous callers asking for it."""
+        catalog = self.client.get('/api/stores?include_pending=true').get_json()
+        self.assertTrue(all(store.get('approved') is not False for store in catalog))
+
+    def test_pending_filter_treats_any_falsy_flag_as_pending(self):
+        """SQLite yields 0 and NULL is possible, so `is not False` let pending
+        stores leak to anonymous callers."""
+        catalog = [
+            {'name': 'Aprobada bool', 'approved': True},
+            {'name': 'Aprobada entero', 'approved': 1},
+            {'name': 'Pendiente bool', 'approved': False},
+            {'name': 'Pendiente entero', 'approved': 0},
+            {'name': 'Pendiente nulo', 'approved': None},
+        ]
+        with patch('app.database_catalog', return_value=catalog):
+            anonymous, _ = visible_pending_catalog(None)
+            self.assertEqual([s['name'] for s in anonymous], ['Aprobada bool', 'Aprobada entero'])
+
+            owner, _ = visible_pending_catalog({'role': 'tienda', 'store_name': 'Pendiente entero'})
+            self.assertIn('Pendiente entero', [s['name'] for s in owner])
+            self.assertNotIn('Pendiente bool', [s['name'] for s in owner])
+
+            staff, _ = visible_pending_catalog({'role': 'superadmin'})
+            self.assertEqual(len(staff), 5)
 
 
 if __name__ == '__main__':

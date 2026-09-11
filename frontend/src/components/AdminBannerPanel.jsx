@@ -21,9 +21,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
   );
   const [tab, setTab] = useState("summary"),
     [managedStores, setManagedStores] = useState(stores),
-    [approved, setApproved] = useState(() =>
-      JSON.parse(localStorage.getItem("choping-approved-stores") || "[]"),
-    ),
+
     [categories, setCategories] = useState(() =>
       configuredCategoryEntries(),
     ),
@@ -42,17 +40,36 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     [editingUser, setEditingUser] = useState(null),
     [userMessage, setUserMessage] = useState("");
   useEffect(() => {
-    fetch(`${API}/api/stores?include_pending=true`)
+    // Pending stores require the admin session; without it the API returns
+    // only the public catalog and the requests tab shows up empty.
+    fetch(`${API}/api/stores?include_pending=true`, {
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    })
       .then((response) => response.json())
       .then((data) => Array.isArray(data) && setManagedStores(data))
       .catch(() => setManagedStores(stores));
-  }, [stores]);
-  const changeApproval = (name, value) => {
-    const next = value
-      ? [...new Set([...approved, name])]
-      : approved.filter((item) => item !== name);
-    setApproved(next);
-    localStorage.setItem("choping-approved-stores", JSON.stringify(next));
+  }, [stores, authToken]);
+  const [approvalError, setApprovalError] = useState("");
+  const [approving, setApproving] = useState("");
+  const changeApproval = async (name, value) => {
+    setApproving(name);
+    setApprovalError("");
+    try {
+      const response = await fetch(`${API}/api/admin/stores/${encodeURIComponent(name)}/approval`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ approved: value }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) setApprovalError(data.error || "No fue posible actualizar la tienda.");
+      else
+        setManagedStores((current) =>
+          current.map((store) => (store.name === name ? { ...store, approved: value } : store)),
+        );
+    } catch {
+      setApprovalError("No fue posible conectar con el servidor.");
+    }
+    setApproving("");
   };
   const changeBannerImage = (index, file, directory = false) => {
     if (!file) return;
@@ -359,6 +376,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
           ) : tab === "stores" || tab === "requests" ? (
             <>
               <h2>{tab === "requests" ? "Solicitudes de tiendas" : "Gestión de tiendas"}</h2>
+              {approvalError && <p className="store-media-error">{approvalError}</p>}
               <p>{tab === "requests" ? "Revisa y aprueba las tiendas que quieren aparecer en el directorio." : "Consulta el estado de todas las tiendas registradas."}</p>
               <div className="admin-store-list">
                 {managedStores.filter((store) => tab !== "requests" || store.approved === false).map((store) => (
@@ -370,17 +388,15 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
                       </small>
                     </div>
                     <button
-                      className={
-                        store.approved !== false && (approved.length === 0 || approved.includes(store.name)) ? "approved" : ""
-                      }
-                      onClick={() =>
-                        changeApproval(
-                          store.name,
-                          !(store.approved !== false && (approved.length === 0 || approved.includes(store.name))),
-                        )
-                      }
+                      className={store.approved !== false ? "approved" : ""}
+                      disabled={approving === store.name}
+                      onClick={() => changeApproval(store.name, store.approved === false)}
                     >
-                      {store.approved !== false && (approved.length === 0 || approved.includes(store.name)) ? "Aprobada" : "Aprobar"}
+                      {approving === store.name
+                        ? "Guardando…"
+                        : store.approved !== false
+                          ? "Aprobada"
+                          : "Aprobar"}
                     </button>
                   </div>
                 ))}

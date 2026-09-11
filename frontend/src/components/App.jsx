@@ -45,8 +45,12 @@ function App() {
       ),
     );
   useEffect(() => {
-    const includePending = user?.role === "tienda" ? "?include_pending=true" : "";
-    fetch(`${API}/api/stores${includePending}`)
+    const staff = isPlatformAdmin(user) || user?.role === "admin" || user?.role === "superadmin";
+    const includePending = user?.role === "tienda" || staff ? "?include_pending=true" : "";
+    const authToken = localStorage.getItem("choping-auth-token");
+    fetch(`${API}/api/stores${includePending}`, {
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    })
       .then((r) => r.json())
       .then((data) => {
         const list = Array.isArray(data) ? data : [];
