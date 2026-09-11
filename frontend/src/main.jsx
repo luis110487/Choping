@@ -255,31 +255,6 @@ function App() {
     );
     return product;
   };
-  const updateStoreProduct = async (productId, draft) => {
-    const authToken = localStorage.getItem("choping-auth-token");
-    if (!authToken) throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
-    const response = await fetch(`${API}/api/store/products/${productId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-      body: JSON.stringify(draft),
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || "No fue posible actualizar el producto.");
-    setStores((current) => current.map((item) => item.name === result.product.store ? { ...item, products: item.products.map((product) => product.id === productId ? { ...product, ...result.product } : product) } : item));
-    setStore((current) => current?.name === result.product.store ? { ...current, products: current.products.map((product) => product.id === productId ? { ...product, ...result.product } : product) } : current);
-    return result.product;
-  };
-  const removeStoreProduct = async (productId) => {
-    const authToken = localStorage.getItem("choping-auth-token");
-    if (!authToken) throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
-    const response = await fetch(`${API}/api/store/products/${productId}`, { method: "DELETE", headers: { Authorization: `Bearer ${authToken}` } });
-    if (!response.ok) {
-      const result = await response.json().catch(() => ({}));
-      throw new Error(result.error || "No fue posible eliminar el producto.");
-    }
-    setStores((current) => current.map((item) => item.name === store?.name ? { ...item, products: item.products.filter((product) => product.id !== productId) } : item));
-    setStore((current) => current ? { ...current, products: current.products.filter((product) => product.id !== productId) } : current);
-  };
   return (
     <div
       className={
@@ -599,8 +574,6 @@ function App() {
           store={store}
           theme={storeThemes[store.name] || "ocean"}
           createProduct={createStoreProduct}
-          updateProduct={updateStoreProduct}
-          removeProduct={removeStoreProduct}
           setTheme={(value) => {
             const next = { ...storeThemes, [store.name]: value };
             setStoreThemes(next);
@@ -1276,7 +1249,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     </div>
   );
 }
-function StoreAdminPanel({ store, theme, setTheme, createProduct, updateProduct, removeProduct, viewStore, close }) {
+function StoreAdminPanel({ store, theme, setTheme, createProduct, viewStore, close }) {
   const themes = [
     { id: "ocean", name: "Ocean", detail: "Azul, limpia y tecnológica" },
     { id: "sunset", name: "Sunset", detail: "Cálida y comercial" },
@@ -1285,7 +1258,6 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, updateProduct,
   ];
   const [tab, setTab] = useState("home");
   const [addingProduct, setAddingProduct] = useState(false);
-  const [editingProductId, setEditingProductId] = useState(null);
   const [productDraft, setProductDraft] = useState({ name: "", sku: "", brand: "", category: store?.category || configuredCategories()[0], variants: "", price: "", original_price: "", stock: "1", status: "active", description: "", story: "", image: "" });
   const [productMessage, setProductMessage] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -1307,13 +1279,7 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, updateProduct,
     ? (products.reduce((total, product) => total + Number(product.rating || 0), 0) / products.length).toFixed(1)
     : "0.0";
   const productCategories = new Set(products.map((product) => product.category)).size;
-  const resetProductDraft = () => setProductDraft({ name: "", sku: "", brand: "", category: store?.category || configuredCategories()[0], variants: "", price: "", original_price: "", stock: "1", status: "active", description: "", story: "", image: "" });
-  const showProductForm = (product = null) => {
-    setEditingProductId(product?.id || null);
-    setProductDraft(product ? { ...product, variants: Array.isArray(product.variants) ? product.variants.join(", ") : product.variants || "", original_price: product.original_price || "" } : { name: "", sku: "", brand: "", category: store?.category || configuredCategories()[0], variants: "", price: "", original_price: "", stock: "1", status: "active", description: "", story: "", image: "" });
-    setAddingProduct(true);
-    setProductMessage("");
-  };
+  const showProductForm = () => { setAddingProduct(true); setProductMessage(""); };
   const uploadProductImage = async (file) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -1346,13 +1312,12 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, updateProduct,
   const saveProduct = async (event) => {
     event.preventDefault();
     try {
-      await (editingProductId ? updateProduct(editingProductId, productDraft) : createProduct(productDraft));
-      resetProductDraft();
+      await createProduct(productDraft);
+      setProductDraft({ name: "", sku: "", brand: "", category: store?.category || configuredCategories()[0], variants: "", price: "", original_price: "", stock: "1", status: "active", description: "", story: "", image: "" });
       setAddingProduct(false);
-      setEditingProductId(null);
-      setProductMessage(editingProductId ? "Producto actualizado." : "Producto creado y publicado en tu catálogo.");
+      setProductMessage("Producto creado y publicado en tu catálogo.");
     } catch (error) {
-      setProductMessage(error.message || "No fue posible guardar el producto.");
+      setProductMessage(error.message || "No fue posible crear el producto.");
     }
   };
   return (
@@ -1372,7 +1337,7 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, updateProduct,
         <div className="store-admin-main">
           <button className="modal-close" onClick={close}>×</button>
           <header className="store-admin-header"><div><small>MI TIENDA</small><h1>¡Hola!</h1><p>Gestiona {store?.name || "tu tienda"} desde un solo lugar.</p></div><div className="store-admin-account"><span>{store?.name?.slice(0, 1) || "T"}</span><strong>{store?.name || "Mi tienda"}</strong></div></header>
-          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras confirmadas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategories}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => { setTab("products"); showProductForm(); }}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>{product.status === "inactive" ? "Inactivo" : "Publicado"}</span><button aria-label={`Editar ${product.name}`} onClick={() => { setTab("products"); showProductForm(product); }}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark"><span>{store?.name?.slice(0, 1) || "T"}</span></div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
+          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras confirmadas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategories}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => { setTab("products"); showProductForm(); }}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>{product.status === "inactive" ? "Inactivo" : "Publicado"}</span><button aria-label={`Editar ${product.name}`} onClick={() => setTab("products")}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark"><span>{store?.name?.slice(0, 1) || "T"}</span></div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
           {tab === "products" && (
             <div className="store-admin-content">
               <div className="store-admin-title">
@@ -1399,12 +1364,12 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, updateProduct,
                   {productDraft.image && <img className="store-product-preview store-product-wide" src={productImageUrl(productDraft.image)} alt="Vista previa del producto" />}
                   <label className="store-product-wide">Descripción<textarea value={productDraft.description} onChange={(event) => setProductDraft({ ...productDraft, description: event.target.value })} required /></label>
                   <label className="store-product-wide">Historia del producto<textarea value={productDraft.story} onChange={(event) => setProductDraft({ ...productDraft, story: event.target.value })} /></label>
-                  <div className="store-product-form-actions"><button className="btn" disabled={uploadingImage}>{uploadingImage ? "Cargando imagen..." : editingProductId ? "Guardar cambios" : "Guardar producto"}</button><button type="button" onClick={() => { setAddingProduct(false); setEditingProductId(null); resetProductDraft(); }}>Cancelar</button></div>
+                  <div className="store-product-form-actions"><button className="btn" disabled={uploadingImage}>{uploadingImage ? "Cargando imagen..." : "Guardar producto"}</button><button type="button" onClick={() => setAddingProduct(false)}>Cancelar</button></div>
                 </form>
               )}
               {productMessage && <p className="store-product-message">{productMessage}</p>}
               <div className="store-admin-list">
-                {products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{product.category} · {money(product.price)}</small></div><span>{product.status === "inactive" ? "Inactivo" : "Publicado"}</span><button aria-label={`Editar ${product.name}`} onClick={() => showProductForm(product)}>✎</button><button aria-label={`Eliminar ${product.name}`} onClick={async () => { if (!window.confirm(`¿Eliminar ${product.name}?`)) return; try { await removeProduct(product.id); setProductMessage("Producto eliminado."); } catch (error) { setProductMessage(error.message || "No fue posible eliminar el producto."); } }}>⌫</button></div>) : <div className="store-admin-empty"><strong>No hay productos aún</strong><span>Agrega el primer producto de tu catálogo.</span></div>}
+                {products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{product.category} · {money(product.price)}</small></div><span>{product.status === "inactive" ? "Inactivo" : "Publicado"}</span><button aria-label={`Editar ${product.name}`}>✎</button><button aria-label={`Eliminar ${product.name}`}>⌫</button></div>) : <div className="store-admin-empty"><strong>No hay productos aún</strong><span>Agrega el primer producto de tu catálogo.</span></div>}
               </div>
             </div>
           )}
