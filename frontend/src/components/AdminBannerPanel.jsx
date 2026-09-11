@@ -130,6 +130,15 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     [newUserStore, setNewUserStore] = useState(""),
     [editingUser, setEditingUser] = useState(null),
     [userMessage, setUserMessage] = useState("");
+  // La lista venia de localStorage, asi que solo mostraba las cuentas creadas
+  // desde ese navegador; la real vive en el servidor.
+  useEffect(() => {
+    if (!authToken) return;
+    fetch(`${API}/api/admin/users`, { headers: { Authorization: `Bearer ${authToken}` } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => Array.isArray(data?.users) && setManagedUsers(data.users))
+      .catch(() => {});
+  }, [authToken]);
   useEffect(() => {
     // Pending stores require the admin session; without it the API returns
     // only the public catalog and the requests tab shows up empty.
@@ -140,6 +149,33 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
       .then((data) => Array.isArray(data) && setManagedStores(data))
       .catch(() => setManagedStores(stores));
   }, [stores, authToken]);
+  const [statusBusy, setStatusBusy] = useState("");
+  /** Suspend or reactivate a store or an account. */
+  const changeStatus = async (kind, id, active) => {
+    setStatusBusy(id);
+    setApprovalError("");
+    const path = kind === "store" ? "stores" : "users";
+    try {
+      const response = await fetch(`${API}/api/admin/${path}/${encodeURIComponent(id)}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ active }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) setApprovalError(data.error || "No fue posible actualizar el estado.");
+      else if (kind === "store")
+        setManagedStores((current) =>
+          current.map((store) => (store.name === id ? { ...store, active } : store)),
+        );
+      else
+        setManagedUsers((current) =>
+          current.map((account) => (account.email === id ? { ...account, active } : account)),
+        );
+    } catch {
+      setApprovalError("No fue posible conectar con el servidor.");
+    }
+    setStatusBusy("");
+  };
   const [approvalError, setApprovalError] = useState("");
   const [approving, setApproving] = useState("");
   const changeApproval = async (name, value) => {
@@ -404,7 +440,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
               </form>
               {userMessage && <p className="admin-category-message">{userMessage}</p>}
               <div className="admin-user-list">
-                {managedUsers.length ? managedUsers.map((account) => <div className="admin-user-row" key={account.email}><span className="admin-user-avatar">{(account.name || account.email).slice(0, 1).toUpperCase()}</span><div><strong>{account.name || "Usuario"}</strong><small>{account.email}</small></div><span className={`admin-role-badge role-${account.role}`}>{account.role}</span>{account.role === "tienda" && <small>{account.store_name || "Sin tienda asignada"}</small>}<button className="admin-user-edit" type="button" onClick={() => editUser(account)}>Editar</button></div>) : <div className="store-admin-empty"><strong>Aún no hay usuarios creados</strong><span>Los usuarios nuevos aparecerán aquí.</span></div>}
+                {managedUsers.length ? managedUsers.map((account) => <div className="admin-user-row" key={account.email}><span className="admin-user-avatar">{(account.name || account.email).slice(0, 1).toUpperCase()}</span><div><strong>{account.name || "Usuario"}</strong><small>{account.email}</small></div><span className={`admin-role-badge role-${account.role}`}>{account.role}</span>{account.role === "tienda" && <small>{account.store_name || "Sin tienda asignada"}</small>}<button className="admin-user-edit" type="button" onClick={() => editUser(account)}>Editar</button><button className={`admin-status-toggle ${account.active === false ? "inactive" : ""}`} type="button" disabled={statusBusy === account.email} title={account.active === false ? "Reactivar la cuenta" : "Desactivar la cuenta"} onClick={() => changeStatus("user", account.email, account.active === false)}>{statusBusy === account.email ? "…" : account.active === false ? "Desactivada" : "Desactivar"}</button></div>) : <div className="store-admin-empty"><strong>Aún no hay usuarios creados</strong><span>Los usuarios nuevos aparecerán aquí.</span></div>}
               </div>
             </>
           ) : tab === "categories" ? (
@@ -496,6 +532,19 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
                         : store.approved !== false
                           ? "Aprobada"
                           : "Aprobar"}
+                    </button>
+                    <button
+                      className={`admin-status-toggle ${store.active === false ? "inactive" : ""}`}
+                      type="button"
+                      disabled={statusBusy === store.name}
+                      title={store.active === false ? "Reactivar la tienda" : "Desactivar la tienda"}
+                      onClick={() => changeStatus("store", store.name, store.active === false)}
+                    >
+                      {statusBusy === store.name
+                        ? "…"
+                        : store.active === false
+                          ? "Desactivada"
+                          : "Desactivar"}
                     </button>
                   </div>
                 ))}

@@ -63,6 +63,7 @@ class LocalUser(db.Model):
     role = db.Column(db.String(20), nullable=False, default='cliente')
     phone = db.Column(db.String(40))
     store_name = db.Column(db.String(120))
+    active = db.Column(db.Boolean, nullable=False, default=True)
 
 class StoreTheme(db.Model):
     """Storefront palette chosen by a store owner.
@@ -234,12 +235,15 @@ def database_catalog(include_pending=False):
         return None
     try:
         ensure_product_schema()
+        has_status = store_status_available()
+        status_column = ', active' if has_status else ''
+        public_filter = 'where approved is true' + (' and active is true' if has_status else '')
         store_query = '''
-            select id, name, owner_name, category, city, description, rating, approved
+            select id, name, owner_name, category, city, description, rating, approved{status_column}
             from stores
             {store_filter}
             order by created_at asc, id asc
-        '''.format(store_filter='' if include_pending else 'where approved is true')
+        '''.format(status_column=status_column, store_filter='' if include_pending else public_filter)
         store_rows = db.session.execute(text(store_query)).mappings().all()
         product_query = '''
             select p.id, p.store_id, p.name, p.category, p.description, p.story,
@@ -248,7 +252,7 @@ def database_catalog(include_pending=False):
             join stores s on s.id = p.store_id
             {store_filter}
             order by p.created_at asc, p.id asc
-        '''.format(store_filter='' if include_pending else 'where s.approved is true')
+        '''.format(store_filter='' if include_pending else public_filter.replace('where ', 'where s.').replace(' and active', ' and s.active'))
         product_rows = db.session.execute(text(product_query)).mappings().all()
         image_rows = db.session.execute(text('''
             select product_id, image_url, position
@@ -272,6 +276,7 @@ def database_catalog(include_pending=False):
                 # Normalized: SQLite yields 0/1 and NULL is possible, so identity
                 # checks against False are not reliable downstream.
                 'approved': bool(row['approved']) if 'approved' in row else True,
+                'active': bool(row['active']) if 'active' in row else True,
                 'products': [],
             }
             stores_by_id[row['id']] = store
@@ -304,6 +309,52 @@ def database_catalog(include_pending=False):
         db.session.rollback()
         return None
 
+STORE_STATUS_COLUMN = {'checked': False, 'present': False}
+
+
+def ensure_local_user_status_column():
+    """Add `active` to an existing local_user table."""
+    ensure_column('local_user', 'active', 'boolean not null default true')
+
+
+def table_columns(table):
+    try:
+        return {column['name'] for column in db.inspect(db.engine).get_columns(table)}
+    except Exception:
+        return set()
+
+
+def ensure_column(table, column, definition):
+    """Add a column when it is missing, on any engine.
+
+    `add column if not exists` is Postgres only: SQLite rejects it, so the
+    column has to be checked first and added plainly.
+    """
+    if column in table_columns(table):
+        return True
+    try:
+        db.session.execute(text(f'alter table {table} add column {column} {definition}'))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+    return column in table_columns(table)
+
+
+def store_status_available():
+    """Whether `stores.active` exists, adding it on first use.
+
+    Cached because the catalog query is built from it on every request, and a
+    missing column would otherwise break the whole catalog.
+    """
+    if STORE_STATUS_COLUMN['checked']:
+        return STORE_STATUS_COLUMN['present']
+    STORE_STATUS_COLUMN['checked'] = True
+    if not os.environ.get('DATABASE_URL'):
+        return False
+    STORE_STATUS_COLUMN['present'] = ensure_column('stores', 'active', 'boolean not null default true')
+    return STORE_STATUS_COLUMN['present']
+
+
 def ensure_store_department_column():
     """Add `department` to an existing stores table.
 
@@ -311,13 +362,7 @@ def ensure_store_department_column():
     """
     if not os.environ.get('DATABASE_URL'):
         return False
-    try:
-        db.session.execute(text('alter table stores add column if not exists department text'))
-        db.session.commit()
-        return True
-    except Exception:
-        db.session.rollback()
-        return False
+    return ensure_column('stores', 'department', 'text')
 
 
 def ensure_store_workspace(name, owner_name, category, city, description, department=''):
@@ -616,10 +661,14 @@ def visible_pending_catalog(actor):
     if actor and actor.get('role') in {'admin', 'superadmin'}:
         return catalog, None
     own = (actor or {}).get('store_name', '').strip().lower() if actor else ''
-    return [
-        store for store in catalog
-        if store.get('approved', True) or (own and store.get('name', '').lower() == own)
-    ], None
+    def visible(store):
+        mine = own and store.get('name', '').lower() == own
+        if not store.get('active', True):
+            # A suspended store is not public, and its owner sees it only to
+            # know it is suspended.
+            return bool(mine)
+        return store.get('approved', True) or bool(mine)
+    return [store for store in catalog if visible(store)], None
 
 
 def parse_platform_theme(payload):
@@ -679,6 +728,87 @@ def save_platform_theme():
         db.session.rollback()
         return jsonify({'error': 'No fue posible guardar la personalizacion.'}), 500
     return jsonify({'theme': theme})
+
+
+@app.put('/api/admin/stores/<path:name>/status')
+def set_store_status(name):
+    """Suspend or reactivate a store.
+
+    Separate from approval on purpose: a store that was approved and later
+    suspended must not fall back to "pending" when it is reactivated.
+    """
+    actor = authenticated_actor()
+    if not actor:
+        return jsonify({'error': 'Solo un administrador puede desactivar tiendas.'}), 403
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data.get('active'), bool):
+        return jsonify({'error': 'Indica si la tienda queda activa o no.'}), 400
+    if not os.environ.get('DATABASE_URL'):
+        return jsonify({'error': 'Esta accion requiere la base de datos configurada.'}), 503
+    if not store_status_available():
+        return jsonify({'error': 'No fue posible preparar el estado de la tienda.'}), 500
+    try:
+        result = db.session.execute(
+            text('update stores set active = :active where lower(name) = lower(:name)'),
+            {'active': data['active'], 'name': name},
+        )
+        if not result.rowcount:
+            db.session.rollback()
+            return jsonify({'error': 'No encontramos esa tienda.'}), 404
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible actualizar la tienda.'}), 500
+    return jsonify({'store': name, 'active': data['active']})
+
+
+@app.get('/api/admin/users')
+def list_admin_users():
+    """Real user list for the admin panel.
+
+    The panel used to read it from the browser's localStorage, so it only
+    ever showed accounts created from that same browser.
+    """
+    if not authenticated_actor():
+        return jsonify({'error': 'Solo un administrador puede ver los usuarios.'}), 403
+    try:
+        accounts = LocalUser.query.order_by(LocalUser.id.asc()).all()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible consultar los usuarios.'}), 500
+    return jsonify({'users': [{
+        'name': account.name,
+        'email': account.email,
+        'role': account.role,
+        'store_name': account.store_name or '',
+        'phone': account.phone or '',
+        'active': account.active,
+    } for account in accounts]})
+
+
+@app.put('/api/admin/users/<path:email>/status')
+def set_user_status(email):
+    actor = authenticated_actor()
+    if not actor:
+        return jsonify({'error': 'Solo un administrador puede desactivar usuarios.'}), 403
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data.get('active'), bool):
+        return jsonify({'error': 'Indica si la cuenta queda activa o no.'}), 400
+    target = email.strip().lower()
+    if target == (actor.get('email') or '').strip().lower():
+        return jsonify({'error': 'No puedes desactivar tu propia cuenta.'}), 400
+    account = LocalUser.query.filter_by(email=target).first()
+    if not account:
+        return jsonify({'error': 'No encontramos ese usuario.'}), 404
+    if account.role == 'superadmin' and actor.get('role') != 'superadmin':
+        return jsonify({'error': 'Solo un superadmin puede desactivar a otro superadmin.'}), 403
+    try:
+        account.active = data['active']
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible actualizar la cuenta.'}), 500
+    return jsonify({'user': {'email': account.email, 'name': account.name, 'active': account.active}})
 
 
 @app.put('/api/admin/stores/<path:name>/approval')
@@ -916,6 +1046,30 @@ def supabase_password_login(email, password):
         'store_name': metadata.get('store_name', ''),
     }
 
+@app.get('/api/auth/session')
+def read_session():
+    """Confirm a stored token still works.
+
+    The token is stateless and lasts eight hours, so without this the
+    interface kept showing a signed in user whose every action failed with a
+    confusing permissions error. It also makes a deactivation take effect on
+    the next load instead of waiting for the token to expire.
+    """
+    actor = authenticated_session()
+    if not actor:
+        return jsonify({'error': 'Tu sesion expiro. Inicia sesion nuevamente.'}), 401
+    account = LocalUser.query.filter_by(email=(actor.get('email') or '').strip().lower()).first()
+    if account and not account.active:
+        return jsonify({'error': 'Esta cuenta esta desactivada. Contacta al administrador.'}), 403
+    user = {
+        'email': actor.get('email', ''),
+        'name': account.name if account else actor.get('name', ''),
+        'role': account.role if account else actor.get('role', 'cliente'),
+        'store_name': account.store_name if account else actor.get('store_name', ''),
+    }
+    return jsonify({'user': user})
+
+
 @app.post('/api/auth/login')
 def login():
     data = request.get_json(silent=True) or {}
@@ -940,6 +1094,8 @@ def login():
             'luis.gamarra@techdatasyn.com',
         })
     account = LocalUser.query.filter_by(email=email).first()
+    if account and not account.active:
+        return jsonify({'error': 'Esta cuenta está desactivada. Contacta al administrador.'}), 403
     if account and check_password_hash(account.password_hash, data['password']):
         if account.role == 'tienda' and account.store_name:
             ensure_store_workspace(
@@ -1102,7 +1258,7 @@ def update_admin_user(email):
     if auth_user_id and not sync_profile_role(auth_user_id, role):
         profile_warning = 'El rol quedó actualizado en Choping; no se pudo sincronizar profiles.'
     db.session.commit()
-    response = {'user': {'name': account.name, 'email': account.email, 'role': account.role, 'store_name': account.store_name}}
+    response = {'user': {'name': account.name, 'email': account.email, 'role': account.role, 'store_name': account.store_name, 'active': account.active}}
     if profile_warning:
         response['warning'] = profile_warning
     return jsonify(response)
@@ -1175,6 +1331,7 @@ def register():
 with app.app_context():
     db.create_all()
     ensure_store_theme_schema()
+    ensure_local_user_status_column()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

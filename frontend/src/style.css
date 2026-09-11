@@ -434,3 +434,11 @@ header{padding:0;background:var(--choping-white);border-bottom:1px solid var(--c
   .nav nav .nav-link{white-space:nowrap}
   .nav-cart{white-space:nowrap}
 }
+
+/* --- Desactivar tienda o cuenta --------------------------------------- */
+button.admin-status-toggle{padding:7px 12px;border:1px solid #f0c2d1;border-radius:8px;background:#fff;color:#c81e4a;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s ease}
+button.admin-status-toggle:hover{background:#fdeef3;border-color:#c81e4a}
+button.admin-status-toggle.inactive{border-color:#cfe0fb;background:#f4f8ff;color:var(--choping-blue)}
+button.admin-status-toggle.inactive:hover{background:#e8f1ff;border-color:var(--choping-blue)}
+button.admin-status-toggle:disabled{opacity:.6;cursor:default}
+.admin-user-row .admin-status-toggle{margin-left:8px}

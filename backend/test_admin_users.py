@@ -443,6 +443,74 @@ class AdminUserProvisioningTests(unittest.TestCase):
             response = self.client.put('/api/platform/theme', headers=admin, json={'theme': payload})
             self.assertEqual(response.status_code, 400, payload)
 
+    def test_deactivated_user_cannot_sign_in(self):
+        headers = self.store_session(store_name='Casa Viva', email='casaviva@gmail.com')
+        admin = {'Authorization': f"Bearer {access_token_for({'email': 'a@b.c', 'role': 'superadmin', 'name': 'A'})}"}
+
+        off = self.client.put('/api/admin/users/casaviva@gmail.com/status', headers=admin, json={'active': False})
+        self.assertEqual(off.status_code, 200)
+        self.assertFalse(off.get_json()['user']['active'])
+
+        denied = self.client.post('/api/auth/login', json={'email': 'casaviva@gmail.com', 'password': 'Clave123'})
+        self.assertEqual(denied.status_code, 403)
+
+        # An already issued token must stop working too, not last eight hours.
+        self.assertEqual(self.client.get('/api/auth/session', headers=headers).status_code, 403)
+
+        on = self.client.put('/api/admin/users/casaviva@gmail.com/status', headers=admin, json={'active': True})
+        self.assertEqual(on.status_code, 200)
+        self.assertEqual(
+            self.client.post('/api/auth/login', json={'email': 'casaviva@gmail.com', 'password': 'Clave123'}).status_code,
+            200,
+        )
+
+    def test_user_status_guards(self):
+        self.store_session(store_name='Casa Viva', email='casaviva@gmail.com')
+        admin_headers = {'Authorization': f"Bearer {access_token_for({'email': 'a@b.c', 'role': 'superadmin', 'name': 'A'})}"}
+
+        self.assertEqual(
+            self.client.put('/api/admin/users/a@b.c/status', headers=admin_headers, json={'active': False}).status_code,
+            400,  # nadie puede desactivarse a si mismo
+        )
+        self.assertEqual(
+            self.client.put('/api/admin/users/nadie@x.c/status', headers=admin_headers, json={'active': False}).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.put('/api/admin/users/casaviva@gmail.com/status', headers=admin_headers, json={'active': 'si'}).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.put('/api/admin/users/casaviva@gmail.com/status', json={'active': False}).status_code,
+            403,
+        )
+
+    def test_session_endpoint_rejects_a_bad_token(self):
+        self.assertEqual(self.client.get('/api/auth/session').status_code, 401)
+        self.assertEqual(
+            self.client.get('/api/auth/session', headers={'Authorization': 'Bearer roto'}).status_code,
+            401,
+        )
+        headers = self.store_session(store_name='Casa Viva', email='casaviva@gmail.com')
+        ok = self.client.get('/api/auth/session', headers=headers)
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(ok.get_json()['user']['email'], 'casaviva@gmail.com')
+
+    def test_inactive_store_is_hidden_from_the_public_catalog(self):
+        catalog = [
+            {'name': 'Activa', 'approved': True, 'active': True},
+            {'name': 'Suspendida', 'approved': True, 'active': False},
+        ]
+        with patch('app.database_catalog', return_value=catalog):
+            anonymous, _ = visible_pending_catalog(None)
+            self.assertEqual([s['name'] for s in anonymous], ['Activa'])
+
+            owner, _ = visible_pending_catalog({'role': 'tienda', 'store_name': 'Suspendida'})
+            self.assertIn('Suspendida', [s['name'] for s in owner])
+
+            staff, _ = visible_pending_catalog({'role': 'superadmin'})
+            self.assertEqual(len(staff), 2)
+
 
 if __name__ == '__main__':
     unittest.main()

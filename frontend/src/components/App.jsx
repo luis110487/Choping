@@ -49,6 +49,27 @@ function App() {
           '{"Tech Zone":"ocean","Casa Viva":"sunset","EcoRuedas":"forest"}',
       ),
     );
+  // Un token guardado puede estar caducado o pertenecer a una cuenta
+  // desactivada: sin comprobarlo, la interfaz seguia mostrando la sesion y
+  // cada accion fallaba con un error de permisos que confundia.
+  useEffect(() => {
+    const authToken = localStorage.getItem("choping-auth-token");
+    if (!authToken) return;
+    fetch(`${API}/api/auth/session`, { headers: { Authorization: `Bearer ${authToken}` } })
+      .then(async (response) => {
+        if (response.ok) {
+          const data = await response.json();
+          if (data?.user) {
+            const refreshed = normalizeAccount(data.user);
+            setUser(refreshed);
+            localStorage.setItem("choping-user", JSON.stringify(refreshed));
+          }
+          return;
+        }
+        if (response.status === 401 || response.status === 403) logout();
+      })
+      .catch(() => {});
+  }, []);
   useEffect(() => {
     fetch(`${API}/api/platform/theme`)
       .then((r) => r.json())
