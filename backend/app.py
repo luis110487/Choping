@@ -550,22 +550,15 @@ def upload_store_product_image():
     actor = authenticated_session()
     if not actor or actor.get('role') != 'tienda':
         return jsonify({'error': 'Solo la cuenta administradora de la tienda puede cargar imágenes.'}), 403
-    uploaded_image = request.files.get('image')
-    if not uploaded_image or not uploaded_image.filename:
-        return jsonify({'error': 'Selecciona una imagen para cargar.'}), 400
-    extension = uploaded_image.filename.rsplit('.', 1)[-1].lower() if '.' in uploaded_image.filename else ''
-    if extension not in {'png', 'jpg', 'jpeg', 'webp', 'gif'} or not (uploaded_image.mimetype or '').startswith('image/'):
-        return jsonify({'error': 'Usa una imagen PNG, JPG, WEBP o GIF.'}), 400
-    filename = secure_filename(uploaded_image.filename)
-    if not filename:
-        return jsonify({'error': 'El nombre del archivo no es válido.'}), 400
-    relative_path = f'uploads/{uuid4().hex}.{extension}'
-    try:
-        os.makedirs(app.config['PRODUCT_UPLOAD_FOLDER'], exist_ok=True)
-        uploaded_image.save(os.path.join(app.config['PRODUCT_UPLOAD_FOLDER'], relative_path.split('/', 1)[1]))
-    except OSError:
-        return jsonify({'error': 'No fue posible cargar la imagen. Intenta nuevamente.'}), 500
-    return jsonify({'image': relative_path}), 201
+    extension, error = validate_image_upload(request.files.get('image'))
+    if error:
+        return jsonify({'error': error}), 400
+    # Same persistent storage as the store banners: Render wipes its disk on
+    # every deploy, so anything saved locally disappears with the next build.
+    image, error = upload_store_media(actor.get('store_name') or 'productos', request.files['image'], extension)
+    if error:
+        return jsonify({'error': error}), 502
+    return jsonify({'image': image}), 201
 
 @app.get('/api/stores')
 def stores():

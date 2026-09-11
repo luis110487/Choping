@@ -128,3 +128,12 @@
 .store-media-remove:hover{background:#c81e4a}
 .store-media-add{display:grid;place-items:center;min-height:88px;border:1px dashed #08bdf2;border-radius:8px;color:#0679a8;font-size:13px;font-weight:700;cursor:pointer;background:#f3fbff}
 .store-media-add:hover{background:#e6f7ff}
+
+.store-identity{display:flex;align-items:center;gap:16px;flex-wrap:wrap;max-width:none;margin:0 auto;padding:26px clamp(24px,4vw,72px) 6px}
+.store-identity-logo{width:72px;height:72px;object-fit:contain;border-radius:12px;background:var(--store-surface);border:1px solid color-mix(in srgb,var(--store-accent),white 65%);padding:6px}
+.store-identity-mark{display:grid;place-items:center;width:72px;height:72px;border-radius:12px;background:var(--store-accent);color:#fff;font-size:30px;font-weight:800;font-family:var(--store-font-heading)}
+.store-identity-copy{flex:1;min-width:220px;display:grid;gap:2px}
+.store-identity-copy h1{margin:0;font-size:30px;color:var(--store-heading);font-family:var(--store-font-heading)}
+.store-identity-copy p{margin:0;color:#63718b;font-size:14px;line-height:1.45}
+.store-identity .stars{font-size:18px;color:var(--store-icon)}
+@media (max-width:640px){.store-identity{padding-top:18px}.store-identity-copy h1{font-size:23px}}

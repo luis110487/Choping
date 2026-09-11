@@ -507,6 +507,21 @@ function App() {
         </main>
       ) : (
         <main className={`store-profile ${themeClassName(storeThemes[store.name])}`}>
+          <header className="store-identity">
+            {store.media?.logo ? (
+              <img className="store-identity-logo" src={storeMediaUrl(store.media.logo)} alt={`Logo de ${store.name}`} />
+            ) : (
+              <span className="store-identity-mark">{store.name?.slice(0, 1) || "T"}</span>
+            )}
+            <div className="store-identity-copy">
+              <h1>{store.name}</h1>
+              <p>
+                {[store.category, store.city].filter(Boolean).join(" · ")}
+                {store.description ? ` — ${store.description}` : ""}
+              </p>
+            </div>
+            <Stars value={store.rating} />
+          </header>
           <div className="shop-grid">
             {products.map((p) => (
               <article
