@@ -1,0 +1,5 @@
+import React, { useState } from "react";
+
+function StoreReviewModal({ store, close }) { const [rating, setRating] = useState(0), [comment, setComment] = useState(""); const save = () => { const reviews = JSON.parse(localStorage.getItem("choping-store-reviews") || "{}"); reviews[store] = { rating, comment, store }; localStorage.setItem("choping-store-reviews", JSON.stringify(reviews)); close(); }; return <div className="overlay review-overlay"><section className="cart-modal review-modal"><div className="cart-modal-content"><small>RESEÑA DE LA TIENDA</small><h2>{store}</h2><div className="rating-picker">{[1,2,3,4,5].map((value) => <button key={value} className={value <= rating ? "chosen" : ""} onClick={() => setRating(value)}>★</button>)}</div><label>Comentario<textarea value={comment} onChange={(e) => setComment(e.target.value)} required /></label><button className="btn cart-checkout" disabled={!rating} onClick={save}>Guardar reseña</button><button className="nav-link" onClick={close}>Cancelar</button></div></section></div>; }
+
+export { StoreReviewModal };
