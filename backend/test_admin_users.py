@@ -11,7 +11,7 @@ os.environ['SUPERADMIN_PASSWORD'] = 'test-superadmin-password'
 os.environ['SUPABASE_URL'] = 'https://example.supabase.co'
 os.environ['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-role-key'
 
-from app import LocalUser, access_token_for, app, db, visible_pending_catalog
+from app import LocalUser, access_token_for, app, db, seed_product_categories, visible_pending_catalog
 
 
 class AdminUserProvisioningTests(unittest.TestCase):
@@ -20,6 +20,8 @@ class AdminUserProvisioningTests(unittest.TestCase):
         self.context.push()
         db.drop_all()
         db.create_all()
+        # La app siembra las categorias al arrancar; setUp recrea las tablas.
+        seed_product_categories()
         self.client = app.test_client()
 
     def tearDown(self):
@@ -572,6 +574,44 @@ class AdminUserProvisioningTests(unittest.TestCase):
             'category': 'Hogar', 'city': 'Barranquilla', 'department': 'Cesar',
         })
         self.assertEqual(mismatch.status_code, 400)
+
+    def test_product_categories_are_listed_and_can_grow(self):
+        listed = self.client.get('/api/product-categories')
+        self.assertEqual(listed.status_code, 200)
+        self.assertGreater(len(listed.get_json()['categories']), 20)
+
+        headers = self.store_session(store_name='Casa Viva', email='casaviva@gmail.com')
+        created = self.client.post('/api/product-categories', headers=headers,
+                                   json={'name': 'Pinturas y acabados'})
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.get_json()['category']['name'], 'Pinturas y acabados')
+        self.assertIn(
+            'Pinturas y acabados',
+            [c['name'] for c in self.client.get('/api/product-categories').get_json()['categories']],
+        )
+
+        # Duplicada aunque cambien mayusculas y espacios.
+        repeated = self.client.post('/api/product-categories', headers=headers,
+                                    json={'name': '  pinturas y ACABADOS '})
+        self.assertEqual(repeated.status_code, 409)
+
+    def test_product_category_creation_is_guarded(self):
+        headers = self.store_session(store_name='Casa Viva', email='casaviva@gmail.com')
+        self.assertEqual(
+            self.client.post('/api/product-categories', headers=headers, json={'name': 'a'}).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.post('/api/product-categories', json={'name': 'Sin sesion'}).status_code,
+            403,
+        )
+        client_token = access_token_for({'email': 'c@x.c', 'role': 'cliente', 'name': 'Cli'})
+        self.assertEqual(
+            self.client.post('/api/product-categories',
+                             headers={'Authorization': f'Bearer {client_token}'},
+                             json={'name': 'Desde un cliente'}).status_code,
+            403,
+        )
 
 
 if __name__ == '__main__':

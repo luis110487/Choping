@@ -453,3 +453,11 @@ button.admin-status-toggle:disabled{opacity:.6;cursor:default}
 .store-account-role{font-size:12px;color:var(--choping-muted)}
 .store-account-card .btn{padding:10px 16px;font-size:13px}
 .store-edit-grid label>input:disabled{background:#f4f7fc;color:var(--choping-muted);cursor:not-allowed}
+
+/* --- Selector de categoria con creacion ------------------------------- */
+.category-picker{display:flex;gap:8px;align-items:stretch}
+.category-picker select,.category-picker input{flex:1;min-width:0}
+button.category-new{flex:0 0 auto;padding:0 14px;border:1px solid #a9c9f7;border-radius:10px;background:var(--choping-white);color:var(--choping-blue);font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;transition:all .2s ease}
+button.category-new:hover{background:#f3f8ff;border-color:var(--choping-blue)}
+.category-new-row{margin-top:8px}
+.category-new-row .btn{flex:0 0 auto;padding:0 18px;font-size:13px}

@@ -43,6 +43,7 @@ function App() {
     [storeAdminOpen, setStoreAdminOpen] = useState(false),
     themeSaveTimer = useRef(0),
     [platformTheme, setPlatformTheme] = useState(DEFAULT_PLATFORM_THEME),
+    [productCategories, setProductCategories] = useState([]),
     [storeThemes, setStoreThemes] = useState(() =>
       JSON.parse(
         localStorage.getItem("choping-store-themes") ||
@@ -68,6 +69,12 @@ function App() {
         }
         if (response.status === 401 || response.status === 403) logout();
       })
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    fetch(`${API}/api/product-categories`)
+      .then((response) => response.json())
+      .then((data) => Array.isArray(data?.categories) && setProductCategories(data.categories))
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -265,6 +272,22 @@ function App() {
       current?.name === product.store ? { ...current, products: [...current.products, product] } : current,
     );
     return product;
+  };
+  const createProductCategory = async (name) => {
+    const authToken = localStorage.getItem("choping-auth-token");
+    if (!authToken) throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
+    const response = await fetch(`${API}/api/product-categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ name }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "No fue posible crear la categoría.");
+    const created = data.category;
+    setProductCategories((current) =>
+      [...current, created].sort((a, b) => a.name.localeCompare(b.name, "es")),
+    );
+    return created;
   };
   const updateStoreProfile = async (draft) => {
     const authToken = localStorage.getItem("choping-auth-token");
@@ -640,6 +663,8 @@ function App() {
           store={store}
           user={user}
           updateStore={updateStoreProfile}
+          productCategories={productCategories}
+          createCategory={createProductCategory}
           theme={normalizeTheme(storeThemes[store.name])}
           media={store?.media || { logo: "", banners: [] }}
           setMedia={(media) => {

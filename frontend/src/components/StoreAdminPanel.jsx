@@ -4,7 +4,21 @@ import { configuredCategories } from "../lib/catalog";
 import { StoreThemeStudio } from "./StoreThemeStudio";
 import { PasswordModal } from "./PasswordModal";
 
-function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, createProduct, updateStore, viewStore, close }) {
+function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, createProduct, updateStore, productCategories = [], createCategory, viewStore, close }) {
+  const [newCategory, setNewCategory] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [categoryError, setCategoryError] = useState("");
+  const addCategory = async () => {
+    setCategoryError("");
+    try {
+      const created = await createCategory(newCategory);
+      setProductDraft((draft) => ({ ...draft, category: created.name }));
+      setNewCategory("");
+      setCreatingCategory(false);
+    } catch (error) {
+      setCategoryError(error.message || "No fue posible crear la categoría.");
+    }
+  };
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [profileDraft, setProfileDraft] = useState({
     category: store?.category || "",
@@ -29,11 +43,13 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
   };
   const [tab, setTab] = useState("home");
   const [addingProduct, setAddingProduct] = useState(false);
-  const [productDraft, setProductDraft] = useState({ name: "", category: store?.category || configuredCategories()[0], price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
+  const [productDraft, setProductDraft] = useState({ name: "", category: "", price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
   const [productMessage, setProductMessage] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const products = store?.products || [];
-  const categoryOptions = [...new Set([...configuredCategories(), store?.category].filter(Boolean))];
+  // Categorias de PRODUCTO: antes se usaba la lista de categorias de tienda,
+  // asi que al crear un producto salia el rubro del negocio.
+  const categoryOptions = productCategories.map((category) => category.name);
   const registeredClients = JSON.parse(localStorage.getItem("choping-registered-users") || "[]")
     .filter((account) => account.role === "cliente" && account.store_name?.toLowerCase() === store?.name?.toLowerCase());
   const maskedEmail = (email = "") => {
@@ -49,7 +65,7 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
   const averageRating = products.length
     ? (products.reduce((total, product) => total + Number(product.rating || 0), 0) / products.length).toFixed(1)
     : "0.0";
-  const productCategories = new Set(products.map((product) => product.category)).size;
+  const productCategoryCount = new Set(products.map((product) => product.category)).size;
   const showProductForm = () => { setAddingProduct(true); setProductMessage(""); };
   const uploadProductImage = async (file) => {
     if (!file) return;
@@ -84,7 +100,7 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
     event.preventDefault();
     try {
       await createProduct(productDraft);
-      setProductDraft({ name: "", category: store?.category || configuredCategories()[0], price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
+      setProductDraft({ name: "", category: "", price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
       setAddingProduct(false);
       setProductMessage("Producto creado y publicado en tu catálogo.");
     } catch (error) {
@@ -108,7 +124,7 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
         <div className="store-admin-main">
           <button className="modal-close" onClick={close}>×</button>
           <header className="store-admin-header"><div><small>MI TIENDA</small><h1>¡Hola!</h1><p>Gestiona {store?.name || "tu tienda"} desde un solo lugar.</p></div><div className="store-admin-account"><span>{store?.name?.slice(0, 1) || "T"}</span><strong>{store?.name || "Mi tienda"}</strong></div></header>
-          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras confirmadas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategories}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => { setTab("products"); showProductForm(); }}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`} onClick={() => setTab("products")}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark"><span>{store?.name?.slice(0, 1) || "T"}</span></div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
+          {tab === "home" && <div className="store-admin-content"><div className="store-admin-stats store-admin-metrics"><div><strong>{products.length}</strong><span>Productos publicados</span></div><div><strong>{totalPurchases}</strong><span>Compras confirmadas</span></div><div><strong>{averageRating}</strong><span>Calificación promedio</span></div><div><strong>{productCategoryCount}</strong><span>Categorías activas</span></div></div><div className="store-admin-columns"><section className="store-admin-table"><div className="store-admin-title"><h2>Mis productos</h2><button className="btn" onClick={() => { setTab("products"); showProductForm(); }}>＋ Agregar producto</button></div>{products.length ? products.map((product) => <div className="store-product-row" key={product.id}><img src={productImageUrl(product.image)} alt="" /><div><strong>{product.name}</strong><small>{money(product.price)}</small></div><span>Activo</span><button aria-label={`Editar ${product.name}`} onClick={() => setTab("products")}>✎</button></div>) : <p>Aún no tienes productos publicados.</p>}</section><aside className="store-admin-info"><h2>Mi tienda</h2><div className="store-admin-store-card"><div className="store-mark"><span>{store?.name?.slice(0, 1) || "T"}</span></div><div><strong>{store?.name}</strong><span>{store?.city || "Colombia"}</span></div></div><button className="btn" onClick={() => setTab("store")}>✎ Editar mi tienda</button></aside></div></div>}
           {tab === "products" && (
             <div className="store-admin-content">
               <div className="store-admin-title">
@@ -118,7 +134,7 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
               {addingProduct && (
                 <form className="store-product-form" onSubmit={saveProduct}>
                   <label>Nombre del producto<input value={productDraft.name} onChange={(event) => setProductDraft({ ...productDraft, name: event.target.value })} required /></label>
-                  <label>Categoría<select value={productDraft.category} onChange={(event) => setProductDraft({ ...productDraft, category: event.target.value })} required>{categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
+                  <label>Categoría<div className="category-picker"><select value={productDraft.category} onChange={(event) => setProductDraft({ ...productDraft, category: event.target.value })} required><option value="">Selecciona una categoría</option>{categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}</select><button type="button" className="category-new" title="Crear una categoría nueva" onClick={() => setCreatingCategory((open) => !open)}>{creatingCategory ? "Cancelar" : "＋ Crear"}</button></div>{creatingCategory && <div className="category-picker category-new-row"><input value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="Nombre de la categoría" maxLength={60} /><button type="button" className="btn" onClick={addCategory}>Agregar</button></div>}{categoryError && <small className="store-media-error">{categoryError}</small>}</label>
                   <label>Precio<input type="number" min="1" value={productDraft.price} onChange={(event) => setProductDraft({ ...productDraft, price: event.target.value })} required /></label>
                   <label>Precio anterior (tachado)<input type="number" min="1" value={productDraft.original_price} onChange={(event) => setProductDraft({ ...productDraft, original_price: event.target.value })} placeholder="Opcional" /></label>
                   <label>Stock disponible<input type="number" min="0" step="1" value={productDraft.stock} onChange={(event) => setProductDraft({ ...productDraft, stock: event.target.value })} required /></label>

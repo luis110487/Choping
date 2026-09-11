@@ -140,6 +140,43 @@ class PlatformTheme(db.Model):
 
 DEFAULT_PLATFORM_THEME = {'background': '', 'fonts': {}}
 
+class ProductCategory(db.Model):
+    """Categories a store can assign to its products.
+
+    Separate from the store categories: a hardware store sells tools, paint
+    and fasteners, so the product list has to grow on its own. It lives in the
+    database because it used to live in localStorage, where a category created
+    by one person existed only in that browser.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(60), nullable=False, unique=True)
+    icon = db.Column(db.String(8), nullable=False, default='')
+
+SEED_PRODUCT_CATEGORIES = [
+    ('Tecnologia', '\U0001F4BB'), ('Celulares', '\U0001F4F1'), ('Computadores', '\U0001F5A5'),
+    ('Audio', '\U0001F3A7'), ('Videojuegos', '\U0001F3AE'), ('Electrodomesticos', '\u26A1'),
+    ('Hogar', '\u2302'), ('Muebles', '\U0001F6CB'), ('Decoracion', '\U0001F5BC'),
+    ('Cocina', '\U0001F373'), ('Jardin', '\U0001F33F'), ('Ferreteria', '\u2692'),
+    ('Herramientas', '\U0001F527'), ('Construccion', '\U0001F9F1'), ('Moda', '\U0001F455'),
+    ('Calzado', '\U0001F45F'), ('Belleza', '\u2728'), ('Peluqueria', '\u2702'),
+    ('Drogueria', '\u271A'), ('Salud', '\u2665'), ('Bebe', '\U0001F37C'),
+    ('Juguetes', '\U0001F9F8'), ('Mascotas', '\U0001F43E'), ('Deportes', '\u26BD'),
+    ('Movilidad', '\U0001F6B2'), ('Automotriz', '\U0001F697'), ('Alimentos', '\U0001F6D2'),
+    ('Papeleria', '\U0001F4DA'), ('Oficina', '\U0001F4BC'),
+]
+
+
+def seed_product_categories():
+    try:
+        if ProductCategory.query.first():
+            return
+        for name, icon in SEED_PRODUCT_CATEGORIES:
+            db.session.add(ProductCategory(name=name, icon=icon))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
 STORE_THEME_FONT_SLOTS = {'heading', 'body'}
 # Whitelisted so a store can never inject arbitrary CSS through the font name.
 STORE_THEME_FONTS = {'sistema', 'moderna', 'editorial', 'amable', 'legible', 'tecnica'}
@@ -1127,6 +1164,41 @@ def update_store_profile():
     }})
 
 
+@app.get('/api/product-categories')
+def list_product_categories():
+    # Public: buyers filter by category and store owners pick one.
+    try:
+        rows = ProductCategory.query.order_by(ProductCategory.name.asc()).all()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'categories': []})
+    return jsonify({'categories': [{'name': row.name, 'icon': row.icon or ''} for row in rows]})
+
+
+@app.post('/api/product-categories')
+def create_product_category():
+    """Let a store add a category when the list falls short."""
+    actor = authenticated_session()
+    if not actor or actor.get('role') not in {'tienda', 'admin', 'superadmin'}:
+        return jsonify({'error': 'Inicia sesion como tienda o administrador para crear categorias.'}), 403
+    data = request.get_json(silent=True) or {}
+    name = ' '.join((data.get('name') or '').split())
+    icon = (data.get('icon') or '').strip()[:8]
+    if len(name) < 2 or len(name) > 60:
+        return jsonify({'error': 'El nombre debe tener entre 2 y 60 caracteres.'}), 400
+    existing = ProductCategory.query.filter(db.func.lower(ProductCategory.name) == name.lower()).first()
+    if existing:
+        return jsonify({'error': f'La categoria "{existing.name}" ya existe.'}), 409
+    try:
+        category = ProductCategory(name=name, icon=icon)
+        db.session.add(category)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible crear la categoria.'}), 500
+    return jsonify({'category': {'name': category.name, 'icon': category.icon or ''}}), 201
+
+
 @app.get('/api/auth/session')
 def read_session():
     """Confirm a stored token still works.
@@ -1413,6 +1485,7 @@ with app.app_context():
     db.create_all()
     ensure_store_theme_schema()
     ensure_local_user_status_column()
+    seed_product_categories()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
