@@ -24,16 +24,12 @@ CORS(app, origins=os.environ.get('FRONTEND_ORIGIN', '*'))
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
-    sku = db.Column(db.String(80))
-    brand = db.Column(db.String(80))
     category = db.Column(db.String(80), nullable=False)
     price = db.Column(db.Integer, nullable=False)
     description = db.Column(db.Text)
     image = db.Column(db.String(255))
     store = db.Column(db.String(120), nullable=False, default='Tienda Choping')
     rating = db.Column(db.Float, default=4.5)
-    status = db.Column(db.String(20), nullable=False, default='active')
-    variants = db.Column(db.Text, default='[]')
 
 class LocalUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -56,7 +52,7 @@ DEMO_PRODUCTS = [
     {'name': 'Bicicleta electrica urbana', 'category': 'Movilidad', 'price': 2800000, 'description': 'Bicicleta electrica ligera para recorridos diarios por la ciudad.', 'image': 'products/moto-electrica.png', 'store': 'EcoRuedas', 'rating': 4.7},
 ]
 for product in DEMO_PRODUCTS:
-    product.update({'sku': f"TDS-{product['name'][:3].upper()}-{product['price']}", 'brand': product['store'], 'variants': [], 'status': 'active', 'story': f"Seleccionado para quienes buscan una compra practica en {product['category'].lower()}.", 'review': 'Excelente calidad, compra recomendada por la comunidad Choping.', 'likes': 120, 'purchases': 24, 'stock': 12, 'original_price': None, 'images': [product['image'], product['image'], product['image']]})
+    product.update({'story': f"Seleccionado para quienes buscan una compra practica en {product['category'].lower()}.", 'review': 'Excelente calidad, compra recomendada por la comunidad Choping.', 'likes': 120, 'purchases': 24, 'stock': 12, 'original_price': None, 'images': [product['image'], product['image'], product['image']]})
 
 @app.get('/api/health')
 def health():
@@ -77,18 +73,7 @@ def products():
     result = [p for p in DEMO_PRODUCTS if not query or query in f"{p['name']} {p['category']} {p['description']} {p['store']}".lower()]
     return jsonify(result)
 
-def parse_product_variants(value):
-    if isinstance(value, list):
-        return value
-    if not value:
-        return []
-    try:
-        parsed = json.loads(value)
-        return parsed if isinstance(parsed, list) else []
-    except (TypeError, ValueError):
-        return []
-
-def database_catalog(include_pending=False, include_inactive=False):
+def database_catalog(include_pending=False):
     if not os.environ.get('DATABASE_URL'):
         return None
     try:
@@ -101,13 +86,13 @@ def database_catalog(include_pending=False, include_inactive=False):
         '''.format(store_filter='' if include_pending else 'where approved is true')
         store_rows = db.session.execute(text(store_query)).mappings().all()
         product_query = '''
-            select p.id, p.store_id, p.name, p.sku, p.brand, p.category, p.description, p.story,
-                   p.price, p.original_price, p.stock, p.status, p.variants, p.image, p.rating, p.review, p.likes, p.purchases
+            select p.id, p.store_id, p.name, p.category, p.description, p.story,
+                   p.price, p.original_price, p.stock, p.image, p.rating, p.review, p.likes, p.purchases
             from products p
             join stores s on s.id = p.store_id
             {store_filter}
             order by p.created_at asc, p.id asc
-        '''.format(store_filter='' if include_pending else "where s.approved is true and p.status = 'active'" if not include_inactive else 'where s.approved is true')
+        '''.format(store_filter='' if include_pending else 'where s.approved is true')
         product_rows = db.session.execute(text(product_query)).mappings().all()
         image_rows = db.session.execute(text('''
             select product_id, image_url, position
@@ -142,16 +127,12 @@ def database_catalog(include_pending=False, include_inactive=False):
             store['products'].append({
                 'id': row['id'],
                 'name': row['name'],
-                'sku': row['sku'] or '',
-                'brand': row['brand'] or '',
                 'category': row['category'],
                 'description': row['description'] or '',
                 'story': row['story'] or '',
                 'price': float(row['price'] or 0),
                 'original_price': float(row['original_price']) if row['original_price'] is not None else None,
                 'stock': row['stock'] if row['stock'] is not None else 0,
-                'status': row['status'] or 'active',
-                'variants': parse_product_variants(row['variants']),
                 'image': image,
                 'images': product_images or ([image] * 3 if image else []),
                 'rating': float(row['rating'] or 0),
@@ -205,10 +186,6 @@ def ensure_product_schema():
     try:
         db.session.execute(text('alter table public.products add column if not exists stock integer not null default 10 check (stock >= 0)'))
         db.session.execute(text('alter table public.products add column if not exists original_price numeric(14,2) check (original_price is null or original_price >= 0)'))
-        db.session.execute(text('alter table public.products add column if not exists sku varchar(80)'))
-        db.session.execute(text('alter table public.products add column if not exists brand varchar(80)'))
-        db.session.execute(text("alter table public.products add column if not exists status varchar(20) not null default 'active' check (status in ('active', 'inactive'))"))
-        db.session.execute(text("alter table public.products add column if not exists variants text not null default '[]'"))
         db.session.commit()
         return True
     except Exception:
@@ -227,23 +204,19 @@ def create_catalog_product(store_name, data):
         image = data.get('image', '').strip() or 'products/pc-gamer.png'
         product_row = db.session.execute(
             text('''
-                insert into products (store_id, name, sku, brand, category, description, story, price, original_price, stock, status, variants, image, rating, review, likes, purchases)
-                values (:store_id, :name, :sku, :brand, :category, :description, :story, :price, :original_price, :stock, :status, :variants, :image, 0, '', 0, 0)
+                insert into products (store_id, name, category, description, story, price, original_price, stock, image, rating, review, likes, purchases)
+                values (:store_id, :name, :category, :description, :story, :price, :original_price, :stock, :image, 0, '', 0, 0)
                 returning id
             '''),
             {
                 'store_id': store_row['id'],
                 'name': data['name'],
-                'sku': data.get('sku') or None,
-                'brand': data.get('brand') or None,
                 'category': data['category'],
                 'description': data.get('description', ''),
                 'story': data.get('story', ''),
                 'price': data['price'],
                 'original_price': data.get('original_price'),
                 'stock': data['stock'],
-                'status': data.get('status', 'active'),
-                'variants': json.dumps(data.get('variants', [])),
                 'image': image,
             },
         ).mappings().first()
@@ -251,16 +224,12 @@ def create_catalog_product(store_name, data):
         return {
             'id': product_row['id'],
             'name': data['name'],
-            'sku': data.get('sku') or '',
-            'brand': data.get('brand') or '',
             'category': data['category'],
             'description': data.get('description', ''),
             'story': data.get('story', ''),
             'price': data['price'],
             'original_price': data.get('original_price'),
             'stock': data['stock'],
-            'status': data.get('status', 'active'),
-            'variants': data.get('variants', []),
             'image': image,
             'images': [image],
             'rating': 0,
@@ -592,24 +561,14 @@ def create_store_product():
             return jsonify({'error': 'El precio anterior no es válido.'}), 400
         if original_price <= price:
             return jsonify({'error': 'El precio anterior debe ser mayor que el precio actual.'}), 400
-    status = data.get('status', 'active').strip().lower()
-    if status not in {'active', 'inactive'}:
-        return jsonify({'error': 'El estado del producto no es válido.'}), 400
-    raw_variants = data.get('variants', [])
-    variants = raw_variants if isinstance(raw_variants, list) else str(raw_variants).split(',')
-    variants = [str(variant).strip() for variant in variants if str(variant).strip()]
     product, error = create_catalog_product(actor.get('store_name', ''), {
         'name': name,
-        'sku': data.get('sku', '').strip(),
-        'brand': data.get('brand', '').strip(),
         'category': category,
         'description': description,
         'story': data.get('story', '').strip(),
         'price': price,
         'original_price': original_price,
         'stock': stock,
-        'status': status,
-        'variants': variants,
         'image': data.get('image', '').strip(),
     })
     if error:
