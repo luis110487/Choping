@@ -165,3 +165,11 @@
   .store-grid{grid-template-columns:1fr}
   .store-card-preview img{height:96px}
 }
+
+/* --- Banners ---------------------------------------------------------- */
+/* Mismo ancho que las tarjetas del directorio: a 1100px quedaban estrechos
+   y desalineados respecto al titulo y la rejilla, que van de borde a borde
+   del contenedor de 1440px. */
+.banner-slider,.store-banner{width:min(1360px,calc(100% - 80px));box-shadow:0 18px 40px #063f9f2e}
+@media (max-width:760px){.banner-slider,.store-banner{width:calc(100% - 44px)}}
+@media (max-width:600px){.banner-slider,.store-banner{width:calc(100% - 32px);box-shadow:0 10px 24px #063f9f24}}
