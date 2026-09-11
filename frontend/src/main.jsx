@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 const API = (import.meta.env.VITE_API_URL || "http://127.0.0.1:5000")
@@ -7,6 +7,59 @@ const API = (import.meta.env.VITE_API_URL || "http://127.0.0.1:5000")
 const money = (n) => "$" + Number(n).toLocaleString("es-CO");
 const productImageUrl = (image) =>
   image && /^(https?:)?\/\//i.test(image) ? image : `${API}/static/img/${image || "products/pc-gamer.png"}`;
+const STORE_PRESETS = [
+  { id: "ocean", name: "Ocean", detail: "Azul, limpia y tecnologica",
+    palette: { background: "#eef7ff", surface: "#fbfdff", heading: "#063f9f", accent: "#08bdf2", price: "#063f9f", priceOld: "#8b97a9", icon: "#e83d73" } },
+  { id: "sunset", name: "Sunset", detail: "Calida y comercial",
+    palette: { background: "#fff5eb", surface: "#fff8f1", heading: "#e85d04", accent: "#f48c06", price: "#bf3b00", priceOld: "#b2917a", icon: "#d00000" } },
+  { id: "forest", name: "Forest", detail: "Natural y confiable",
+    palette: { background: "#eef9f1", surface: "#f4fbf6", heading: "#26734d", accent: "#40916c", price: "#1b5e3a", priceOld: "#8aa895", icon: "#e07a1f" } },
+  { id: "mono", name: "Minimal", detail: "Elegante y sobria",
+    palette: { background: "#f1f1f1", surface: "#f7f7f7", heading: "#252525", accent: "#555555", price: "#111111", priceOld: "#9a9a9a", icon: "#252525" } },
+];
+const STORE_COLOR_FIELDS = [
+  { key: "background", label: "Fondo de la tienda", hint: "Color base detras del catalogo" },
+  { key: "surface", label: "Fondo de las tarjetas", hint: "Superficie de cada producto" },
+  { key: "heading", label: "Titulos", hint: "Nombre de los productos y encabezados" },
+  { key: "accent", label: "Acento y botones", hint: "Bordes activos y llamados a la accion" },
+  { key: "price", label: "Precio", hint: "Precio vigente de venta" },
+  { key: "priceOld", label: "Precio tachado", hint: "Precio anterior en ofertas" },
+  { key: "icon", label: "Iconos y etiquetas", hint: "Estrellas y sello de oferta" },
+];
+const DEFAULT_PRESET = "ocean";
+
+/** Accept both the legacy string theme and the richer customizable object. */
+function normalizeTheme(value) {
+  if (typeof value === "string") return { preset: value || DEFAULT_PRESET, colors: {} };
+  if (!value || typeof value !== "object") return { preset: DEFAULT_PRESET, colors: {} };
+  return { preset: value.preset || DEFAULT_PRESET, colors: value.colors || {} };
+}
+
+function presetPalette(preset) {
+  return (STORE_PRESETS.find((item) => item.id === preset) || STORE_PRESETS[0]).palette;
+}
+
+/** Effective palette: the preset defaults with the owner's overrides on top. */
+function themePalette(value) {
+  const theme = normalizeTheme(value);
+  return { ...presetPalette(theme.preset), ...theme.colors };
+}
+
+function themeClassName(value) {
+  return `theme-${normalizeTheme(value).preset}`;
+}
+
+/** Only the owner's overrides become inline vars, so presets stay in the CSS. */
+function themeStyleVars(value) {
+  const theme = normalizeTheme(value);
+  const vars = {};
+  for (const { key } of STORE_COLOR_FIELDS) {
+    const color = theme.colors[key];
+    if (color) vars[`--store-${key === "priceOld" ? "price-old" : key}`] = color;
+  }
+  return vars;
+}
+
 const CATEGORY_CATALOG = [
   { id: "tecnologia", name: "Tecnologia", icon: "💻" },
   { id: "celulares", name: "Celulares", icon: "📱" },
@@ -101,6 +154,7 @@ function App() {
     [user, setUser] = useState(loadCurrentUser),
     [profileOpen, setProfileOpen] = useState(() => localStorage.getItem("choping-profile-open") === "true"),
     [storeAdminOpen, setStoreAdminOpen] = useState(false),
+    themeSaveTimer = useRef(0),
     [storeThemes, setStoreThemes] = useState(() =>
       JSON.parse(
         localStorage.getItem("choping-store-themes") ||
@@ -111,7 +165,20 @@ function App() {
     const includePending = user?.role === "tienda" ? "?include_pending=true" : "";
     fetch(`${API}/api/stores${includePending}`)
       .then((r) => r.json())
-      .then((data) => setStores(Array.isArray(data) ? data : []));
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        setStores(list);
+        // The backend is the source of truth for palettes; localStorage is only a cache.
+        const saved = {};
+        for (const item of list) if (item.theme) saved[item.name] = item.theme;
+        if (Object.keys(saved).length) {
+          setStoreThemes((current) => {
+            const next = { ...current, ...saved };
+            localStorage.setItem("choping-store-themes", JSON.stringify(next));
+            return next;
+          });
+        }
+      });
   }, [user?.role]);
   useEffect(() => {
     if (user?.role !== "tienda" || store || !user.store_name) return;
@@ -228,13 +295,42 @@ function App() {
     );
     return product;
   };
+  /** Apply the palette locally at once; persist it after the picker settles. */
+  const saveStoreTheme = (value, { onStatus } = {}) => {
+    if (!store?.name) return;
+    const storeName = store.name;
+    const theme = normalizeTheme(value);
+    setStoreThemes((current) => {
+      const next = { ...current, [storeName]: theme };
+      localStorage.setItem("choping-store-themes", JSON.stringify(next));
+      return next;
+    });
+    onStatus?.("saving");
+    clearTimeout(themeSaveTimer.current);
+    themeSaveTimer.current = setTimeout(async () => {
+      const authToken = localStorage.getItem("choping-auth-token");
+      if (!authToken) return onStatus?.("error", "Tu sesión expiró. Inicia sesión nuevamente.");
+      try {
+        const response = await fetch(`${API}/api/store/theme`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ store: storeName, theme }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) return onStatus?.("error", data.error || "No fue posible guardar la personalización.");
+        setStores((current) =>
+          current.map((item) => (item.name === storeName ? { ...item, theme: data.theme } : item)),
+        );
+        onStatus?.("saved");
+      } catch {
+        onStatus?.("error", "No fue posible conectar con el servidor.");
+      }
+    }, 500);
+  };
   return (
     <div
-      className={
-        store
-          ? `store-app theme-${storeThemes[store.name] || "ocean"}`
-          : "store-app"
-      }
+      className={store ? `store-app ${themeClassName(storeThemes[store.name])}` : "store-app"}
+      style={store ? themeStyleVars(storeThemes[store.name]) : undefined}
     >
       <header>
         <div className="nav">
@@ -387,9 +483,7 @@ function App() {
           )}
         </main>
       ) : (
-        <main
-          className={`store-profile theme-${storeThemes[store.name] || "ocean"}`}
-        >
+        <main className={`store-profile ${themeClassName(storeThemes[store.name])}`}>
           <div className="shop-grid">
             {products.map((p) => (
               <article
@@ -506,13 +600,9 @@ function App() {
       {storeAdminOpen && (
         <StoreAdminPanel
           store={store}
-          theme={storeThemes[store.name] || "ocean"}
+          theme={normalizeTheme(storeThemes[store.name])}
           createProduct={createStoreProduct}
-          setTheme={(value) => {
-            const next = { ...storeThemes, [store.name]: value };
-            setStoreThemes(next);
-            localStorage.setItem("choping-store-themes", JSON.stringify(next));
-          }}
+          setTheme={saveStoreTheme}
           viewStore={() => {
             setProfileOpen(false);
             setStoreAdminOpen(false);
@@ -1182,13 +1272,121 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
     </div>
   );
 }
+function StoreThemeStudio({ store, theme, setTheme }) {
+  const [status, setStatus] = useState("");
+  const [statusError, setStatusError] = useState("");
+  const onStatus = (next, message = "") => {
+    setStatus(next);
+    setStatusError(message);
+  };
+  const save = (value) => setTheme(value, { onStatus });
+  const palette = themePalette(theme);
+  const overrides = normalizeTheme(theme).colors;
+  const sample = (store?.products || [])[0];
+  const previewProduct = {
+    name: sample?.name || "Producto de ejemplo",
+    category: sample?.category || store?.category || "Categoria",
+    price: Number(sample?.price) || 189000,
+    original_price: Number(sample?.original_price) || Number(sample?.price) * 1.25 || 249000,
+    image: sample?.image,
+  };
+  const applyPreset = (preset) => save({ preset, colors: {} });
+  const setColor = (key, color) =>
+    save({ preset: normalizeTheme(theme).preset, colors: { ...overrides, [key]: color } });
+  const resetColor = (key) => {
+    const next = { ...overrides };
+    delete next[key];
+    save({ preset: normalizeTheme(theme).preset, colors: next });
+  };
+  const resetAll = () => save({ preset: normalizeTheme(theme).preset, colors: {} });
+  return (
+    <div className="store-admin-content theme-studio">
+      <small>PERSONALIZACIÓN</small>
+      <h2>Diseña tu tienda</h2>
+      <p>Empieza con una plantilla y ajusta cada color a la identidad de tu marca.</p>
+      <div className="theme-options">
+        {STORE_PRESETS.map((item) => (
+          <button
+            key={item.id}
+            className={`theme-option ${normalizeTheme(theme).preset === item.id ? "selected" : ""}`}
+            onClick={() => applyPreset(item.id)}
+          >
+            <span
+              className="theme-preview"
+              style={{ background: `linear-gradient(135deg, ${item.palette.heading} 0 42%, ${item.palette.background} 42%)` }}
+            />
+            <strong>{item.name}</strong>
+            <small>{item.detail}</small>
+          </button>
+        ))}
+      </div>
+      <div className="theme-studio-grid">
+        <div className="theme-color-list">
+          <div className="theme-color-head">
+            <h3>Paleta de la tienda</h3>
+            <span className="theme-save-state">
+              {status === "saving" && <em>Guardando…</em>}
+              {status === "saved" && <em className="ok">Guardado en tu tienda</em>}
+              {status === "error" && <em className="bad">{statusError}</em>}
+            </span>
+            {Object.keys(overrides).length > 0 && (
+              <button type="button" className="nav-link" onClick={resetAll}>
+                Restaurar plantilla
+              </button>
+            )}
+          </div>
+          {STORE_COLOR_FIELDS.map((field) => (
+            <label className="theme-color-row" key={field.key}>
+              <input
+                type="color"
+                value={palette[field.key]}
+                onChange={(event) => setColor(field.key, event.target.value)}
+                aria-label={field.label}
+              />
+              <span className="theme-color-copy">
+                <strong>{field.label}</strong>
+                <small>{field.hint}</small>
+              </span>
+              <span className="theme-color-value">{palette[field.key]}</span>
+              {overrides[field.key] && (
+                <button type="button" className="theme-color-reset" onClick={() => resetColor(field.key)} title="Volver al color de la plantilla">
+                  ↺
+                </button>
+              )}
+            </label>
+          ))}
+        </div>
+        <aside className="theme-live-preview" style={{ background: palette.background }}>
+          <span className="theme-preview-label" style={{ color: palette.heading }}>
+            Vista previa en vivo
+          </span>
+          <article className="product-card theme-preview-card" style={{ background: palette.surface, borderColor: palette.accent }}>
+            <div className="product-photo">
+              <img src={productImageUrl(previewProduct.image)} alt={previewProduct.name} />
+              <span className="product-sale-badge" style={{ background: palette.icon }}>Oferta</span>
+            </div>
+            <div className="product-info">
+              <small>{previewProduct.category}</small>
+              <h2 style={{ color: palette.heading }}>{previewProduct.name}</h2>
+              <span className="stars" style={{ color: palette.icon }}>★★★★★</span>
+              <div className="product-price-stack">
+                <del style={{ color: palette.priceOld }}>{money(previewProduct.original_price)}</del>
+                <strong style={{ color: palette.price }}>{money(previewProduct.price)}</strong>
+              </div>
+              <button className="btn add-cart" style={{ background: palette.accent }}>Añadir al carrito</button>
+            </div>
+          </article>
+        </aside>
+      </div>
+      <h3>Contenido de la tienda</h3>
+      <label>Logo de la tienda<input type="file" accept="image/*" /></label>
+      <label>Banners superiores (hasta 3)<input type="file" accept="image/*" multiple /></label>
+      <p className="form-hint">Los cambios visuales se aplican inmediatamente a tu perfil.</p>
+    </div>
+  );
+}
+
 function StoreAdminPanel({ store, theme, setTheme, createProduct, viewStore, close }) {
-  const themes = [
-    { id: "ocean", name: "Ocean", detail: "Azul, limpia y tecnológica" },
-    { id: "sunset", name: "Sunset", detail: "Cálida y comercial" },
-    { id: "forest", name: "Forest", detail: "Natural y confiable" },
-    { id: "mono", name: "Minimal", detail: "Elegante y sobria" },
-  ];
   const [tab, setTab] = useState("home");
   const [addingProduct, setAddingProduct] = useState(false);
   const [productDraft, setProductDraft] = useState({ name: "", category: store?.category || configuredCategories()[0], price: "", original_price: "", stock: "1", description: "", story: "", image: "" });
@@ -1304,7 +1502,7 @@ function StoreAdminPanel({ store, theme, setTheme, createProduct, viewStore, clo
           )}
           {tab === "clients" && <div className="store-admin-content"><h2>Clientes de {store?.name}</h2><p>Clientes vinculados a esta tienda. Los datos de contacto se muestran protegidos.</p><div className="store-admin-list">{registeredClients.length ? registeredClients.map((client) => <div className="store-client-row" key={client.email}><span className="store-client-avatar">{(client.name || client.email).slice(0, 1).toUpperCase()}</span><div><strong>{client.name || "Cliente"}</strong><small>{maskedEmail(client.email)}</small></div><span>{maskedPhone(client.phone)}</span></div>) : <div className="store-admin-empty"><strong>Aún no hay clientes vinculados</strong><span>Los clientes asociados a esta tienda aparecerán aquí.</span></div>}</div></div>}
           {tab === "store" && <div className="store-admin-content"><h2>Información de mi tienda</h2><p>Consulta y actualiza la información visible para tus clientes.</p><div className="store-edit-grid"><label>Nombre de la tienda<input defaultValue={store?.name || ""} /></label><label>Categoría<input defaultValue={store?.category || ""} /></label><label>Ciudad<input defaultValue={store?.city || ""} /></label><label>Descripción<textarea defaultValue={store?.description || ""} /></label></div><button className="btn">Guardar información</button></div>}
-          {tab === "settings" && <div className="store-admin-content"><small>PERSONALIZACIÓN</small><h2>Diseña tu perfil</h2><p>Elige una plantilla para organizar tu tienda.</p><div className="theme-options">{themes.map((item) => <button key={item.id} className={`theme-option theme-${item.id} ${theme === item.id ? "selected" : ""}`} onClick={() => setTheme(item.id)}><span className="theme-preview" /><strong>{item.name}</strong><small>{item.detail}</small></button>)}</div><h3>Contenido de la tienda</h3><label>Logo de la tienda<input type="file" accept="image/*" /></label><label>Banners superiores (hasta 3)<input type="file" accept="image/*" multiple /></label><p className="form-hint">Los cambios visuales se aplican inmediatamente a tu perfil.</p></div>}
+          {tab === "settings" && <StoreThemeStudio store={store} theme={theme} setTheme={setTheme} />}
         </div>
       </section>
     </div>

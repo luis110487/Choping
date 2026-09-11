@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from uuid import uuid4
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -54,6 +55,62 @@ class LocalUser(db.Model):
     role = db.Column(db.String(20), nullable=False, default='cliente')
     phone = db.Column(db.String(40))
     store_name = db.Column(db.String(120))
+
+class StoreTheme(db.Model):
+    """Storefront palette chosen by a store owner.
+
+    Kept in its own table so it works both on the Postgres catalog and on the
+    local SQLite fallback, without touching the `stores` schema owned by Supabase.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    store_name = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    preset = db.Column(db.String(32), nullable=False, default='ocean')
+    colors = db.Column(db.Text, nullable=False, default='{}')
+
+    def as_dict(self):
+        try:
+            colors = json.loads(self.colors or '{}')
+        except ValueError:
+            colors = {}
+        return {'preset': self.preset, 'colors': colors if isinstance(colors, dict) else {}}
+
+STORE_THEME_PRESETS = {'ocean', 'sunset', 'forest', 'mono'}
+STORE_THEME_COLOR_KEYS = {'background', 'surface', 'heading', 'accent', 'price', 'priceOld', 'icon'}
+DEFAULT_STORE_THEME = {'preset': 'ocean', 'colors': {}}
+HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
+
+def parse_store_theme(payload):
+    """Validate an incoming palette, returning (theme, error)."""
+    if not isinstance(payload, dict):
+        return None, 'El tema enviado no es valido.'
+    preset = str(payload.get('preset') or 'ocean').strip().lower()
+    if preset not in STORE_THEME_PRESETS:
+        return None, 'La plantilla seleccionada no existe.'
+    raw_colors = payload.get('colors') or {}
+    if not isinstance(raw_colors, dict):
+        return None, 'Los colores enviados no son validos.'
+    colors = {}
+    for key, value in raw_colors.items():
+        if key not in STORE_THEME_COLOR_KEYS:
+            return None, f'El color "{key}" no se puede personalizar.'
+        if not isinstance(value, str) or not HEX_COLOR.match(value.strip()):
+            return None, f'El color de "{key}" debe estar en formato #rrggbb.'
+        colors[key] = value.strip().lower()
+    return {'preset': preset, 'colors': colors}, None
+
+def store_themes_by_name():
+    try:
+        return {row.store_name.lower(): row.as_dict() for row in StoreTheme.query.all()}
+    except Exception:
+        db.session.rollback()
+        return {}
+
+def apply_store_themes(catalog):
+    """Attach each store's saved palette, falling back to the default preset."""
+    themes = store_themes_by_name()
+    for store in catalog:
+        store['theme'] = themes.get((store.get('name') or '').lower(), DEFAULT_STORE_THEME)
+    return catalog
 
 DEMO_PRODUCTS = [
     {'name': 'Combo PC Gamer TUF', 'category': 'Tecnologia', 'price': 3850000, 'description': 'Computador gamer completo para jugar, estudiar y crear contenido.', 'image': 'products/pc-gamer.png', 'store': 'Tech Zone', 'rating': 4.8},
@@ -257,6 +314,42 @@ def create_catalog_product(store_name, data):
         db.session.rollback()
         return None, 'No fue posible guardar el producto.'
 
+@app.put('/api/store/theme')
+def save_store_theme():
+    actor = authenticated_session()
+    if not actor:
+        return jsonify({'error': 'Inicia sesion para personalizar la tienda.'}), 401
+    data = request.get_json(silent=True) or {}
+    requested_store = (data.get('store') or '').strip()
+    if actor.get('role') == 'tienda':
+        store_name = (actor.get('store_name') or '').strip()
+        if not store_name:
+            return jsonify({'error': 'Tu cuenta no tiene una tienda asignada.'}), 403
+        if requested_store and requested_store.lower() != store_name.lower():
+            return jsonify({'error': 'Solo puedes personalizar tu propia tienda.'}), 403
+    elif actor.get('role') in {'admin', 'superadmin'}:
+        store_name = requested_store
+        if not store_name:
+            return jsonify({'error': 'Indica la tienda que quieres personalizar.'}), 400
+    else:
+        return jsonify({'error': 'No tienes permisos para personalizar tiendas.'}), 403
+
+    theme, error = parse_store_theme(data.get('theme') if isinstance(data.get('theme'), dict) else data)
+    if error:
+        return jsonify({'error': error}), 400
+    try:
+        record = StoreTheme.query.filter(db.func.lower(StoreTheme.store_name) == store_name.lower()).first()
+        if not record:
+            record = StoreTheme(store_name=store_name)
+            db.session.add(record)
+        record.preset = theme['preset']
+        record.colors = json.dumps(theme['colors'])
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible guardar la personalizacion.'}), 500
+    return jsonify({'store': store_name, 'theme': theme})
+
 @app.post('/api/store/product-images')
 def upload_store_product_image():
     actor = authenticated_session()
@@ -283,14 +376,14 @@ def upload_store_product_image():
 def stores():
     catalog = database_catalog(request.args.get('include_pending') == 'true')
     if catalog is not None:
-        return jsonify(catalog)
+        return jsonify(apply_store_themes(catalog))
     result=[]
     for p in DEMO_PRODUCTS:
         store=next((s for s in result if s['name']==p['store']),None)
         if not store:
             store={'name':p['store'],'rating':4.8,'category':p['category'],'products':[]}; result.append(store)
         store['products'].append(p)
-    return jsonify(result)
+    return jsonify(apply_store_themes(result))
 
 VALID_ROLES = {'cliente', 'tienda', 'admin', 'superadmin'}
 
