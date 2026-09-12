@@ -1401,7 +1401,15 @@ def send_email(to_addresses, subject, lines):
     request_to_resend = Request(
         'https://api.resend.com/emails',
         data=payload,
-        headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            # Cloudflare protege la API de Resend y rechaza el agente por
+            # defecto de urllib con "error code: 1010", antes de que la
+            # peticion llegue siquiera a Resend.
+            'User-Agent': 'Choping/1.0 (+https://choping-one.vercel.app)',
+        },
         method='POST',
     )
     try:

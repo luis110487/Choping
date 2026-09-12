@@ -861,6 +861,27 @@ class AdminUserProvisioningTests(unittest.TestCase):
                 })
                 self.assertNotEqual(respuesta.status_code, 200, typo)
 
+    def test_resend_request_identifies_itself(self):
+        """Cloudflare protege la API de Resend y rechaza el agente por defecto
+        de urllib con "error code: 1010", antes de llegar a Resend."""
+        respuesta = MagicMock()
+        respuesta.read.return_value = b'{"id":"abc"}'
+        entorno = {
+            'RESEND_API_KEY': 're_x',
+            'ALERT_EMAIL_TO': 'destino@example.com',
+            'ALERT_EMAIL_FROM': 'Prueba <prueba@example.com>',
+        }
+        with patch.dict(os.environ, entorno), patch('app.urlopen') as abrir:
+            abrir.return_value.__enter__.return_value = respuesta
+            enviado, identificador = send_alert_email('Asunto', ['linea'])
+
+        self.assertTrue(enviado)
+        self.assertEqual(identificador, 'abc')
+        peticion = abrir.call_args[0][0]
+        agente = peticion.get_header('User-agent') or ''
+        self.assertTrue(agente.startswith('Choping/'), agente)
+        self.assertNotIn('urllib', agente.lower())
+
 
 if __name__ == '__main__':
     unittest.main()
