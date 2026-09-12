@@ -1,6 +1,7 @@
 import os
 import json
 import re
+from datetime import datetime, timezone
 from uuid import uuid4
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -1320,6 +1321,137 @@ def save_review():
     return jsonify({'rating': summary[0], 'count': summary[1]}), 201
 
 
+class Notification(db.Model):
+    """Aviso dirigido a un destinatario dentro de la aplicacion.
+
+    `audience` dice a quien va y `target` a cual: la tienda por nombre, el
+    cliente por correo. Para los administradores es una bandeja compartida,
+    porque un aviso como "hay una tienda por aprobar" deja de ser pendiente
+    para todo el equipo cuando alguien lo atiende.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    audience = db.Column(db.String(10), nullable=False)
+    target = db.Column(db.String(255), nullable=False, default='')
+    kind = db.Column(db.String(40), nullable=False)
+    title = db.Column(db.String(160), nullable=False)
+    body = db.Column(db.String(400), nullable=False, default='')
+    read = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+NOTIFICATION_AUDIENCES = {'admin', 'store', 'client'}
+
+
+def notify(audience, kind, title, body='', target=''):
+    """Registra un aviso. Nunca interrumpe la accion que lo origina."""
+    if audience not in NOTIFICATION_AUDIENCES:
+        return None
+    try:
+        aviso = Notification(
+            audience=audience,
+            target=(target or '').strip().lower(),
+            kind=kind,
+            title=title[:160],
+            body=(body or '')[:400],
+        )
+        db.session.add(aviso)
+        db.session.commit()
+        return aviso
+    except Exception:
+        db.session.rollback()
+        return None
+
+
+def notification_scope(actor):
+    """(audience, target) que le corresponde ver a quien pregunta."""
+    role = (actor or {}).get('role')
+    if role in {'admin', 'superadmin'}:
+        return 'admin', None
+    if role == 'tienda':
+        return 'store', (actor.get('store_name') or '').strip().lower()
+    return 'client', (actor.get('email') or '').strip().lower()
+
+
+def send_alert_email(subject, lines):
+    """Envia por Resend. Sin credenciales no hace nada: el aviso queda en la campana."""
+    api_key = os.environ.get('RESEND_API_KEY', '').strip()
+    to_address = os.environ.get('ALERT_EMAIL_TO', '').strip()
+    from_address = os.environ.get('ALERT_EMAIL_FROM', '').strip()
+    if not api_key or not to_address or not from_address:
+        return False, 'email-not-configured'
+    cuerpo = ''.join(f'<p>{line}</p>' for line in lines)
+    payload = json.dumps({
+        'from': from_address,
+        'to': [address.strip() for address in to_address.split(',') if address.strip()],
+        'subject': subject,
+        'html': f'<div style="font-family:system-ui,sans-serif;color:#18345f">{cuerpo}</div>',
+    }).encode('utf-8')
+    request_to_resend = Request(
+        'https://api.resend.com/emails',
+        data=payload,
+        headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urlopen(request_to_resend, timeout=10) as response:
+            response.read()
+        return True, None
+    except HTTPError as error:
+        return False, f'{error.code}: {error.read()[:200].decode("utf-8", "replace")}'
+    except (URLError, TimeoutError) as error:
+        return False, str(error)
+
+
+@app.get('/api/notifications')
+def list_notifications():
+    actor = authenticated_session()
+    if not actor:
+        return jsonify({'error': 'Inicia sesion para ver tus avisos.'}), 401
+    audience, target = notification_scope(actor)
+    try:
+        query = Notification.query.filter_by(audience=audience)
+        if target is not None:
+            query = query.filter_by(target=target)
+        rows = query.order_by(Notification.id.desc()).limit(30).all()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'notifications': [], 'unread': 0})
+    return jsonify({
+        'unread': sum(1 for row in rows if not row.read),
+        'notifications': [{
+            'id': row.id,
+            'kind': row.kind,
+            'title': row.title,
+            'body': row.body or '',
+            'read': bool(row.read),
+            'created_at': row.created_at.isoformat() if row.created_at else '',
+        } for row in rows],
+    })
+
+
+@app.put('/api/notifications/read')
+def mark_notifications_read():
+    actor = authenticated_session()
+    if not actor:
+        return jsonify({'error': 'Inicia sesion para ver tus avisos.'}), 401
+    audience, target = notification_scope(actor)
+    data = request.get_json(silent=True) or {}
+    wanted = data.get('id')
+    try:
+        query = Notification.query.filter_by(audience=audience)
+        if target is not None:
+            query = query.filter_by(target=target)
+        if wanted is not None:
+            query = query.filter_by(id=wanted)
+        for row in query.all():
+            row.read = True
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible actualizar los avisos.'}), 500
+    return jsonify({'ok': True})
+
+
 @app.get('/api/auth/session')
 def read_session():
     """Confirm a stored token still works.
@@ -1636,9 +1768,30 @@ def register():
             data['category'].strip(),
             data['city'].strip(),
             data['description'].strip(),
+            department,
         )
         if not workspace_ready:
             return jsonify({'error': workspace_error}), 500
+        # La tienda queda pendiente: hay que avisar a quien la aprueba. El
+        # correo se intenta despues del registro y su fallo no lo tumba.
+        tienda = data['store_name'].strip()
+        ubicacion = ' · '.join(part for part in (data['city'].strip(), department) if part)
+        notify(
+            'admin',
+            'store-pending',
+            f'Nueva tienda por aprobar: {tienda}',
+            f"{data['category'].strip()}{' · ' + ubicacion if ubicacion else ''} · Responsable: {name} ({email})",
+        )
+        send_alert_email(
+            f'Choping: nueva tienda por aprobar ({tienda})',
+            [
+                f'La tienda <strong>{tienda}</strong> se registro y espera aprobacion.',
+                f"Categoria: {data['category'].strip()}",
+                f'Ubicacion: {ubicacion or "sin indicar"}',
+                f'Responsable: {name} ({email})',
+                'Apruebala desde el panel administrativo, en Solicitudes.',
+            ],
+        )
     account = LocalUser.query.filter_by(email=email).first()
     if account and not check_password_hash(account.password_hash, password):
         return jsonify({'error': 'Ya existe un usuario con ese correo. Inicia sesión o usa otra contraseña.'}), 409

@@ -11,7 +11,8 @@ os.environ['SUPERADMIN_PASSWORD'] = 'test-superadmin-password'
 os.environ['SUPABASE_URL'] = 'https://example.supabase.co'
 os.environ['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-role-key'
 
-from app import LocalUser, access_token_for, app, apply_ratings, db, seed_product_categories, visible_pending_catalog
+from app import (LocalUser, access_token_for, app, apply_ratings, db, notify,
+                 seed_product_categories, send_alert_email, visible_pending_catalog)
 
 
 class AdminUserProvisioningTests(unittest.TestCase):
@@ -210,7 +211,11 @@ class AdminUserProvisioningTests(unittest.TestCase):
         })
 
         self.assertEqual(response.status_code, 201)
-        mock_workspace.assert_called_once_with('TDS', 'Responsable TDS', 'Tecnologia', 'Barranquilla', 'Software')
+        # El departamento se pasa al espacio de trabajo: antes se validaba en el
+        # registro y luego se perdia sin guardarse.
+        mock_workspace.assert_called_once_with(
+            'TDS', 'Responsable TDS', 'Tecnologia', 'Barranquilla', 'Software', '',
+        )
 
     @patch('app.create_catalog_product', create=True)
     def test_store_user_can_create_a_product_for_its_own_store(self, mock_create_product):
@@ -709,6 +714,67 @@ class AdminUserProvisioningTests(unittest.TestCase):
         self.assertEqual(body['rating'], 5)
         self.assertEqual(body['count'], 1)
         self.assertEqual(body['reviews'][0]['author'], 'ana')
+
+    def test_notifications_reach_only_their_audience(self):
+        notify('admin', 'store-pending', 'Tienda por aprobar')
+        notify('store', 'order', 'Nuevo pedido', target='Tech Zone')
+        notify('client', 'order-status', 'Pedido enviado', target='ana@x.c')
+
+        def titles(actor):
+            headers = {'Authorization': f'Bearer {access_token_for(actor)}'}
+            return [n['title'] for n in self.client.get('/api/notifications', headers=headers).get_json()['notifications']]
+
+        self.assertEqual(titles({'email': 'a@b.c', 'role': 'superadmin', 'name': 'A'}), ['Tienda por aprobar'])
+        self.assertEqual(
+            titles({'email': 't@b.c', 'role': 'tienda', 'name': 'T', 'store_name': 'Tech Zone'}),
+            ['Nuevo pedido'],
+        )
+        self.assertEqual(titles({'email': 'ana@x.c', 'role': 'cliente', 'name': 'Ana'}), ['Pedido enviado'])
+
+        # Otra tienda y otro cliente no ven nada ajeno.
+        self.assertEqual(
+            titles({'email': 'o@b.c', 'role': 'tienda', 'name': 'O', 'store_name': 'Casa Viva'}), [],
+        )
+        self.assertEqual(titles({'email': 'beto@x.c', 'role': 'cliente', 'name': 'Beto'}), [])
+        self.assertEqual(self.client.get('/api/notifications').status_code, 401)
+
+    def test_marking_read_only_affects_the_caller(self):
+        notify('admin', 'store-pending', 'Tienda por aprobar')
+        notify('store', 'order', 'Nuevo pedido', target='Tech Zone')
+        admin = {'Authorization': f"Bearer {access_token_for({'email': 'a@b.c', 'role': 'superadmin', 'name': 'A'})}"}
+        store = {'Authorization': f"Bearer {access_token_for({'email': 't@b.c', 'role': 'tienda', 'name': 'T', 'store_name': 'Tech Zone'})}"}
+
+        self.assertEqual(self.client.put('/api/notifications/read', headers=admin, json={}).status_code, 200)
+        self.assertEqual(self.client.get('/api/notifications', headers=admin).get_json()['unread'], 0)
+        # El aviso de la tienda sigue pendiente.
+        self.assertEqual(self.client.get('/api/notifications', headers=store).get_json()['unread'], 1)
+
+    @patch('app.sync_profile_role', return_value=True)
+    @patch('app.ensure_store_workspace', return_value=(True, None))
+    @patch('app.create_supabase_user', return_value=({'id': 'x'}, None))
+    @patch('app.send_alert_email', return_value=(True, None))
+    def test_store_registration_alerts_the_administrators(self, mail, _user, _workspace, _role):
+        response = self.client.post('/api/auth/register', json={
+            'name': 'Marta Rios', 'email': 'marta@ferre.co', 'password': 'Clave1234',
+            'role': 'tienda', 'store_name': 'Ferreteria Del Norte', 'category': 'Ferreteria',
+            'city': 'Soledad', 'department': 'Atlántico', 'description': 'Herramientas',
+        })
+        self.assertEqual(response.status_code, 201)
+
+        admin = {'Authorization': f"Bearer {access_token_for({'email': 'a@b.c', 'role': 'superadmin', 'name': 'A'})}"}
+        titles = [n['title'] for n in self.client.get('/api/notifications', headers=admin).get_json()['notifications']]
+        self.assertIn('Nueva tienda por aprobar: Ferreteria Del Norte', titles)
+
+        self.assertTrue(mail.called)
+        subject, _lines = mail.call_args[0]
+        self.assertIn('Ferreteria Del Norte', subject)
+
+    def test_alert_email_is_optional(self):
+        """Sin credenciales no se envia nada y nada se rompe."""
+        with patch.dict(os.environ, {'RESEND_API_KEY': '', 'ALERT_EMAIL_TO': '', 'ALERT_EMAIL_FROM': ''}):
+            sent, reason = send_alert_email('Prueba', ['linea'])
+        self.assertFalse(sent)
+        self.assertEqual(reason, 'email-not-configured')
 
 
 if __name__ == '__main__':

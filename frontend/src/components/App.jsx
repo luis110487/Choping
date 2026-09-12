@@ -11,6 +11,7 @@ import { AdminBannerPanel } from "./AdminBannerPanel";
 import { StoreAdminPanel } from "./StoreAdminPanel";
 import { ClientProfile } from "./ClientProfile";
 import { ProfileMenu } from "./ProfileMenu";
+import { NotificationBell } from "./NotificationBell";
 import { LoginModal } from "./LoginModal";
 
 function App() {
@@ -453,6 +454,8 @@ function App() {
               </button>
             )}
             {user && (
+              <>
+              <NotificationBell />
               <div className="profile-menu-anchor">
                 <button
                   className="user-avatar-button"
@@ -488,6 +491,7 @@ function App() {
                   />
                 )}
               </div>
+              </>
             )}
             {isPlatformAdmin(user) && (
               <button className="nav-link" onClick={() => setAdminOpen(true)}>
@@ -734,7 +738,7 @@ function App() {
         <span>
           Desarrollado por{" "}
           <a href="https://www.techdatasync.com" target="_blank" rel="noopener noreferrer">
-            www.techdatasync.com
+            Tech DataSync
           </a>
         </span>
       </footer>

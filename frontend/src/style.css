@@ -507,3 +507,22 @@ button.panel-menu-button:hover{border-color:var(--choping-blue);color:var(--chop
 .site-footer a{color:var(--choping-blue);font-weight:600;text-decoration:none}
 .site-footer a:hover{text-decoration:underline}
 @media (max-width:480px){.site-footer{gap:4px;padding:20px 16px;font-size:12px}.site-footer-separator{display:none}}
+
+/* --- Campana de avisos ------------------------------------------------- */
+.bell-anchor{position:relative;display:inline-flex}
+button.bell-button{position:relative;width:40px;height:40px;padding:0;border:1px solid var(--choping-border);border-radius:10px;background:var(--choping-white);font-size:17px;line-height:1;cursor:pointer;transition:all .2s ease}
+button.bell-button:hover{border-color:var(--choping-blue);background:#f4f8ff}
+.bell-badge{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;display:grid;place-items:center;border-radius:20px;background:#e83d73;color:#fff;font-size:10px;font-style:normal;font-weight:800}
+.bell-panel{position:absolute;top:calc(100% + 10px);right:0;z-index:40;width:min(320px,86vw);border:1px solid var(--choping-border);border-radius:var(--radius-md);background:var(--choping-white);box-shadow:0 20px 44px rgba(16,43,87,.22);overflow:hidden;text-align:left}
+.bell-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid #eef2f9}
+.bell-head strong{font-size:14px;color:var(--choping-dark)}
+.bell-list{list-style:none;margin:0;padding:0;max-height:320px;overflow-y:auto}
+.bell-list li{display:grid;gap:2px;padding:12px 14px;border-bottom:1px solid #f1f5fb}
+.bell-list li:last-child{border-bottom:0}
+.bell-list li.sin-leer{background:#f4f8ff;border-left:3px solid var(--choping-blue);padding-left:11px}
+.bell-list strong{font-size:13px;font-weight:600;color:var(--choping-dark);line-height:1.35}
+.bell-list small{font-size:12px;color:var(--choping-muted);line-height:1.45}
+.bell-when{font-size:11px;color:#9aa8bd}
+.bell-empty{margin:0;padding:22px 14px;text-align:center;color:var(--choping-muted);font-size:13px}
+.panel-bell{position:absolute;top:16px;right:68px;z-index:12}
+@media (max-width:800px){.panel-bell{right:60px}}

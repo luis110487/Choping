@@ -3,6 +3,7 @@ import { API, money, productImageUrl } from "../lib/api";
 import { configuredCategories } from "../lib/catalog";
 import { StoreThemeStudio } from "./StoreThemeStudio";
 import { PasswordModal } from "./PasswordModal";
+import { NotificationBell } from "./NotificationBell";
 
 function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, createProduct, updateStore, productCategories = [], createCategory, editProduct, removeProduct, viewStore, close }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -165,6 +166,7 @@ function StoreAdminPanel({ store, user, theme, setTheme, media, setMedia, create
           <div className="store-admin-sidebar-footer"><button onClick={close}>↩ <span>Cerrar panel</span></button></div>
         </aside>
         <div className="store-admin-main">
+          <div className="panel-bell"><NotificationBell /></div>
           <button
             className="panel-menu-button"
             type="button"

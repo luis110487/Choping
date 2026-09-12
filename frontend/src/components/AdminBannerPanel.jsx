@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { API, money } from "../lib/api";
 import { configuredCategoryEntries } from "../lib/catalog";
 import { DEFAULT_FONTS, DEFAULT_PLATFORM_BACKGROUND, STORE_FONTS, STORE_FONT_SLOTS } from "../lib/theme";
+import { NotificationBell } from "./NotificationBell";
 
 function PlatformLookEditor({ theme, setTheme, authToken }) {
   const [status, setStatus] = useState("");
@@ -344,6 +345,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
           <div className="admin-sidebar-footer">Sesión de superadministrador</div>
         </aside>
         <div className="admin-main">
+          <div className="panel-bell"><NotificationBell /></div>
           <button
             className="panel-menu-button"
             type="button"
