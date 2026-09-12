@@ -536,3 +536,11 @@ button.bell-button:hover{border-color:var(--choping-blue);background:#f4f8ff}
 .profile-section{margin-top:18px;padding-top:16px;border-top:1px solid var(--choping-border);min-height:120px}
 .profile-section h3{margin:0 0 12px}
 .profile-actions{display:grid;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--choping-border)}
+
+/* --- Diagnostico de alertas ------------------------------------------- */
+.alert-config{display:grid;gap:8px;margin:16px 0}
+.alert-config-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;border:1px solid var(--choping-border);border-radius:var(--radius-sm);background:var(--choping-white)}
+.alert-config-row code{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--choping-dark)}
+.alert-config-row span{font-size:12px;font-weight:600}
+.alert-config-row span.ok{color:#1b7f4d}
+.alert-config-row span.falta{color:#c81e4a}

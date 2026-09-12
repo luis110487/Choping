@@ -151,6 +151,34 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
       .catch(() => setManagedStores(stores));
   }, [stores, authToken]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [alertStatus, setAlertStatus] = useState(null);
+  const [alertResult, setAlertResult] = useState("");
+  const [alertTesting, setAlertTesting] = useState(false);
+  const cabeceras = { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` };
+  const cargarEstadoAlertas = async () => {
+    try {
+      const response = await fetch(`${API}/api/admin/alerts/status`, { headers: cabeceras });
+      if (response.ok) setAlertStatus(await response.json());
+    } catch {
+      /* se reintenta al volver a abrir */
+    }
+  };
+  const probarCorreo = async () => {
+    setAlertTesting(true);
+    setAlertResult("");
+    try {
+      const response = await fetch(`${API}/api/admin/alerts/test`, { method: "POST", headers: cabeceras });
+      const data = await response.json().catch(() => ({}));
+      setAlertResult(
+        data.enviado
+          ? "Correo de prueba enviado. Revisa la bandeja del destinatario."
+          : `No se pudo enviar: ${data.detalle || data.error || "error desconocido"}`,
+      );
+    } catch {
+      setAlertResult("No fue posible conectar con el servidor.");
+    }
+    setAlertTesting(false);
+  };
   const [statusBusy, setStatusBusy] = useState("");
   /** Suspend or reactivate a store or an account. */
   const changeStatus = async (kind, id, active) => {
@@ -390,6 +418,12 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
               Apariencia
             </button>
             <button
+              className={tab === "alerts" ? "selected" : ""}
+              onClick={() => { setTab("alerts"); cargarEstadoAlertas(); }}
+            >
+              Alertas
+            </button>
+            <button
               className={tab === "stores" ? "selected" : ""}
               onClick={() => setTab("stores")}
             >
@@ -504,6 +538,37 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
                 ))}
               </div>
             </>
+          ) : tab === "alerts" ? (
+            <div className="store-admin-content">
+              <h2>Alertas por correo</h2>
+              <p>
+                Los avisos siempre llegan a la campana. El correo es adicional y necesita
+                tres variables configuradas en el servidor.
+              </p>
+              <div className="alert-config">
+                {["RESEND_API_KEY", "ALERT_EMAIL_TO", "ALERT_EMAIL_FROM"].map((clave) => (
+                  <div className="alert-config-row" key={clave}>
+                    <code>{clave}</code>
+                    <span className={alertStatus && alertStatus[clave] !== "falta" ? "ok" : "falta"}>
+                      {alertStatus ? alertStatus[clave] : "…"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {alertStatus && !alertStatus.configurado && (
+                <p className="form-hint">
+                  Mientras falte alguna, las alertas se ven solo en la campana.
+                </p>
+              )}
+              <button className="btn" type="button" disabled={alertTesting} onClick={probarCorreo}>
+                {alertTesting ? "Enviando…" : "Enviar correo de prueba"}
+              </button>
+              {alertResult && (
+                <p className={alertResult.startsWith("Correo") ? "password-ok" : "store-media-error"}>
+                  {alertResult}
+                </p>
+              )}
+            </div>
           ) : tab === "look" ? (
             <PlatformLookEditor theme={platformTheme} setTheme={setPlatformTheme} authToken={authToken} />
           ) : tab === "banners" || tab === "directory-banners" ? (

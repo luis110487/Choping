@@ -1378,6 +1378,14 @@ def send_alert_email(subject, lines):
     to_address = os.environ.get('ALERT_EMAIL_TO', '').strip()
     from_address = os.environ.get('ALERT_EMAIL_FROM', '').strip()
     if not api_key or not to_address or not from_address:
+        faltan = [
+            nombre for nombre, valor in (
+                ('RESEND_API_KEY', api_key),
+                ('ALERT_EMAIL_TO', to_address),
+                ('ALERT_EMAIL_FROM', from_address),
+            ) if not valor
+        ]
+        app.logger.warning('Alerta por correo no enviada, faltan variables: %s', ', '.join(faltan))
         return False, 'email-not-configured'
     cuerpo = ''.join(f'<p>{line}</p>' for line in lines)
     payload = json.dumps({
@@ -1395,11 +1403,49 @@ def send_alert_email(subject, lines):
     try:
         with urlopen(request_to_resend, timeout=10) as response:
             response.read()
+        app.logger.info('Alerta por correo enviada: %s', subject)
         return True, None
     except HTTPError as error:
-        return False, f'{error.code}: {error.read()[:200].decode("utf-8", "replace")}'
+        detalle = f'{error.code}: {error.read()[:300].decode("utf-8", "replace")}'
     except (URLError, TimeoutError) as error:
-        return False, str(error)
+        detalle = str(error)
+    # Sin esto un fallo de correo era invisible: la campana funcionaba y nadie
+    # sabia por que no llegaba el mensaje.
+    app.logger.error('Alerta por correo rechazada por Resend: %s', detalle)
+    return False, detalle
+
+
+@app.get('/api/admin/alerts/status')
+def alerts_status():
+    """Dice si el correo esta configurado, sin exponer la clave."""
+    if not authenticated_actor():
+        return jsonify({'error': 'Solo un administrador puede consultar esto.'}), 403
+    api_key = os.environ.get('RESEND_API_KEY', '').strip()
+    to_address = os.environ.get('ALERT_EMAIL_TO', '').strip()
+    from_address = os.environ.get('ALERT_EMAIL_FROM', '').strip()
+    return jsonify({
+        'configurado': bool(api_key and to_address and from_address),
+        'RESEND_API_KEY': 'definida' if api_key else 'falta',
+        'ALERT_EMAIL_TO': to_address or 'falta',
+        'ALERT_EMAIL_FROM': from_address or 'falta',
+    })
+
+
+@app.post('/api/admin/alerts/test')
+def alerts_test():
+    """Envia un correo de prueba y devuelve el resultado real de Resend."""
+    if not authenticated_actor():
+        return jsonify({'error': 'Solo un administrador puede enviar la prueba.'}), 403
+    enviado, detalle = send_alert_email(
+        'Choping: prueba de alertas',
+        [
+            'Este es un correo de prueba enviado desde el panel administrativo.',
+            'Si lo recibiste, las alertas por correo estan funcionando.',
+        ],
+    )
+    if enviado:
+        return jsonify({'enviado': True})
+    return jsonify({'enviado': False, 'detalle': detalle}), 502
 
 
 @app.get('/api/notifications')
