@@ -38,7 +38,7 @@ function App() {
     ),
     [adminOpen, setAdminOpen] = useState(false),
     [user, setUser] = useState(loadCurrentUser),
-    [profileOpen, setProfileOpen] = useState(() => localStorage.getItem("choping-profile-open") === "true"),
+    [profileOpen, setProfileOpen] = useState(false),
     [menuOpen, setMenuOpen] = useState(false),
     [accountSection, setAccountSection] = useState(""),
     [storeAdminOpen, setStoreAdminOpen] = useState(false),
@@ -242,7 +242,7 @@ function App() {
     landedOnOwnStore.current = false;
     localStorage.removeItem("choping-user");
     localStorage.removeItem("choping-auth-token");
-    localStorage.removeItem("choping-profile-open");
+    localStorage.removeItem("choping-profile-open"); // resto de versiones anteriores
     setProfileOpen(false);
     setAdminOpen(false);
     setStoreAdminOpen(false);
@@ -474,7 +474,6 @@ function App() {
                     openAccount={(section) => {
                       setAccountSection(section);
                       setProfileOpen(true);
-                      localStorage.setItem("choping-profile-open", "true");
                     }}
                     openAdmin={() => setAdminOpen(true)}
                     openStoreAdmin={openStoreDashboard}
@@ -683,7 +682,7 @@ function App() {
           openStoreAdmin={openStoreDashboard}
           store={store}
           logout={logout}
-          close={() => { setProfileOpen(false); setAccountSection(""); localStorage.setItem("choping-profile-open", "false"); }}
+          close={() => { setProfileOpen(false); setAccountSection(""); }}
         />
       )}
       {adminOpen && (

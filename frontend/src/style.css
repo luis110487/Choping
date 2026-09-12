@@ -526,3 +526,13 @@ button.bell-button:hover{border-color:var(--choping-blue);background:#f4f8ff}
 .bell-empty{margin:0;padding:22px 14px;text-align:center;color:var(--choping-muted);font-size:13px}
 .panel-bell{position:absolute;top:16px;right:68px;z-index:12}
 @media (max-width:800px){.panel-bell{right:60px}}
+
+/* --- Cuenta por secciones --------------------------------------------- */
+.profile-shortcuts button{position:relative;cursor:pointer;border:1px solid var(--choping-border);border-radius:var(--radius-md);background:var(--choping-white);transition:all .2s ease}
+.profile-shortcuts button:hover{border-color:#9fc4ff;background:#f7fbff}
+.profile-shortcuts button.activa{border-color:var(--choping-blue);background:#f4f8ff;box-shadow:0 0 0 3px rgba(7,94,232,.08)}
+.profile-shortcuts button.activa strong,.profile-shortcuts button.activa b{color:var(--choping-blue)}
+.profile-pending{position:absolute;top:8px;right:8px;min-width:18px;height:18px;padding:0 5px;display:grid;place-items:center;border-radius:20px;background:#e83d73;color:#fff;font-size:10px;font-style:normal;font-weight:800}
+.profile-section{margin-top:18px;padding-top:16px;border-top:1px solid var(--choping-border);min-height:120px}
+.profile-section h3{margin:0 0 12px}
+.profile-actions{display:grid;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--choping-border)}
