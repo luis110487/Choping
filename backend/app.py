@@ -1635,23 +1635,13 @@ def login():
     email = data.get('email', '').strip().lower()
     if not email or not data.get('password'):
         return jsonify({'error': 'Correo y contraseña son obligatorios'}), 400
+    # Solo el dominio correcto. Las variantes mal escritas que habia aqui
+    # (techdatasaync, techdatasyn) no pertenecen a nadie: cualquiera que las
+    # registrara obtenia superadministrador.
     configured_superadmin = os.environ.get('SUPERADMIN_EMAIL', '').strip().lower()
-    superadmin_emails = {
-        'luis.gamarra@techdatasync.com',
-        'luis.gamarra@techdatasaync.com',
-        'luis.gamarra@techdatasyn.com',
-    }
+    superadmin_emails = {'luis.gamarra@techdatasync.com'}
     if configured_superadmin:
         superadmin_emails.add(configured_superadmin)
-    if configured_superadmin in {
-        'luis.gamarra@techdatasync.com',
-        'luis.gamarra@techdatasaync.com',
-    }:
-        superadmin_emails.update({
-            'luis.gamarra@techdatasync.com',
-            'luis.gamarra@techdatasaync.com',
-            'luis.gamarra@techdatasyn.com',
-        })
     account = LocalUser.query.filter_by(email=email).first()
     if account and not account.active:
         return jsonify({'error': 'Esta cuenta está desactivada. Contacta al administrador.'}), 403

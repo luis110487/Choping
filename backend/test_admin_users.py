@@ -845,6 +845,22 @@ class AdminUserProvisioningTests(unittest.TestCase):
         _, desactivada = account_from_reset_token(password_reset_token(cuenta))
         self.assertIn('desactivada', desactivada)
 
+    def test_typo_domains_no_longer_reach_superadmin(self):
+        """Los dominios mal escritos abrian la puerta de superadmin con la
+        contrasena maestra; solo el dominio correcto debe hacerlo."""
+        with patch.dict(os.environ, {'SUPERADMIN_PASSWORD': 'clave-maestra'}):
+            correcto = self.client.post('/api/auth/login', json={
+                'email': 'luis.gamarra@techdatasync.com', 'password': 'clave-maestra',
+            })
+            self.assertEqual(correcto.status_code, 200)
+            self.assertEqual(correcto.get_json()['user']['role'], 'superadmin')
+
+            for typo in ('luis.gamarra@techdatasaync.com', 'luis.gamarra@techdatasyn.com'):
+                respuesta = self.client.post('/api/auth/login', json={
+                    'email': typo, 'password': 'clave-maestra',
+                })
+                self.assertNotEqual(respuesta.status_code, 200, typo)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,8 +1,6 @@
-const SUPERADMIN_EMAILS = new Set([
-  "luis.gamarra@techdatasync.com",
-  "luis.gamarra@techdatasaync.com",
-  "luis.gamarra@techdatasyn.com",
-]);
+// Solo el dominio correcto: las variantes mal escritas que habia aqui no
+// pertenecen a nadie, y quien las registrara pasaba a ser superadministrador.
+const SUPERADMIN_EMAILS = new Set(["luis.gamarra@techdatasync.com"]);
 const isPlatformAdmin = (account) =>
   account &&
   (["admin", "superadmin"].includes(account.role) ||
