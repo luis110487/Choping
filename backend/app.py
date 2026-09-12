@@ -1480,7 +1480,7 @@ def forgot_password():
     """
     data = request.get_json(silent=True) or {}
     email = (data.get('email') or '').strip().lower()
-    respuesta = {'message': 'Si el correo esta registrado, enviamos el enlace para restaurar la contrasena.'}
+    respuesta = {'message': 'Si el correo está registrado, enviamos el enlace para restaurar tu contraseña. Revisa también la carpeta de spam o correo no deseado.'}
     if not email:
         return jsonify({'error': 'Indica tu correo electronico.'}), 400
     account = LocalUser.query.filter_by(email=email).first()

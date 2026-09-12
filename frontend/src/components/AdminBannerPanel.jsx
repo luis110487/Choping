@@ -172,7 +172,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
       setAlertResult(
         data.enviado
           ? `Resend aceptó el mensaje${data.id ? ` (id ${data.id})` : ""}. De ${data.de} para ${data.para}. ` +
-            "Aceptar no es entregar: si no llega, busca ese id en el panel de Resend para ver si fue entregado o rebotado."
+            "Revisa también la carpeta de spam. Si no llega, busca ese id en el panel de Resend para ver si fue entregado o rebotado."
           : `No se pudo enviar: ${data.detalle || data.error || "error desconocido"}`,
       );
     } catch {
