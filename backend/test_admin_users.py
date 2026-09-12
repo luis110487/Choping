@@ -11,8 +11,9 @@ os.environ['SUPERADMIN_PASSWORD'] = 'test-superadmin-password'
 os.environ['SUPABASE_URL'] = 'https://example.supabase.co'
 os.environ['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-role-key'
 
-from app import (LocalUser, access_token_for, app, apply_ratings, db, notify,
-                 seed_product_categories, send_alert_email, visible_pending_catalog)
+from app import (LocalUser, access_token_for, account_from_reset_token, app, apply_ratings,
+                 db, notify, password_reset_token, seed_product_categories, send_alert_email,
+                 visible_pending_catalog)
 
 
 class AdminUserProvisioningTests(unittest.TestCase):
@@ -775,6 +776,74 @@ class AdminUserProvisioningTests(unittest.TestCase):
             sent, reason = send_alert_email('Prueba', ['linea'])
         self.assertFalse(sent)
         self.assertEqual(reason, 'email-not-configured')
+
+    def _cuenta_para_restaurar(self, email='olvida@x.c', clave='ClaveVieja1'):
+        db.session.add(LocalUser(
+            name='Olvidadiza', email=email,
+            password_hash=generate_password_hash(clave), role='cliente', phone='300',
+        ))
+        db.session.commit()
+        return LocalUser.query.filter_by(email=email).first()
+
+    @patch('app.send_email', return_value=(True, None))
+    def test_forgot_password_does_not_reveal_who_has_account(self, mail):
+        self._cuenta_para_restaurar()
+
+        existe = self.client.post('/api/auth/password/forgot', json={'email': 'olvida@x.c'})
+        no_existe = self.client.post('/api/auth/password/forgot', json={'email': 'nadie@x.c'})
+
+        # Misma respuesta: si difiriera se podrian averiguar los correos registrados.
+        self.assertEqual(existe.status_code, no_existe.status_code)
+        self.assertEqual(existe.get_json(), no_existe.get_json())
+        # Pero el correo solo sale para la cuenta real.
+        self.assertEqual(mail.call_count, 1)
+        destino = mail.call_args[0][0]
+        self.assertEqual(destino, ['olvida@x.c'])
+
+        self.assertEqual(self.client.post('/api/auth/password/forgot', json={}).status_code, 400)
+
+    def test_reset_link_works_once_and_expires(self):
+        cuenta = self._cuenta_para_restaurar()
+        token = password_reset_token(cuenta)
+
+        self.assertEqual(
+            self.client.post('/api/auth/password/reset', json={'token': token, 'password': 'corta'}).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.post('/api/auth/password/reset',
+                             json={'token': token[:-4] + 'xxxx', 'password': 'ClaveNueva2026'}).status_code,
+            400,
+        )
+
+        ok = self.client.post('/api/auth/password/reset', json={'token': token, 'password': 'ClaveNueva2026'})
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(
+            self.client.post('/api/auth/login', json={'email': 'olvida@x.c', 'password': 'ClaveVieja1'}).status_code,
+            401,
+        )
+        self.assertEqual(
+            self.client.post('/api/auth/login', json={'email': 'olvida@x.c', 'password': 'ClaveNueva2026'}).status_code,
+            200,
+        )
+
+        # Un solo uso: la huella de la contrasena cambio y el enlace ya no vale.
+        repetido = self.client.post('/api/auth/password/reset',
+                                    json={'token': token, 'password': 'OtraClave2026'})
+        self.assertEqual(repetido.status_code, 400)
+        self.assertIn('uso', repetido.get_json()['error'])
+
+    def test_reset_token_rejects_expired_and_inactive(self):
+        cuenta = self._cuenta_para_restaurar()
+        token = password_reset_token(cuenta)
+
+        _, vencido = account_from_reset_token(token, max_age=-1)
+        self.assertIn('expiro', vencido)
+
+        cuenta.active = False
+        db.session.commit()
+        _, desactivada = account_from_reset_token(password_reset_token(cuenta))
+        self.assertIn('desactivada', desactivada)
 
 
 if __name__ == '__main__':

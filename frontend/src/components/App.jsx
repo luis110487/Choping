@@ -13,6 +13,7 @@ import { ClientProfile } from "./ClientProfile";
 import { ProfileMenu } from "./ProfileMenu";
 import { NotificationBell } from "./NotificationBell";
 import { LoginModal } from "./LoginModal";
+import { ResetPasswordModal } from "./ResetPasswordModal";
 
 function App() {
   const [stores, setStores] = useState([]),
@@ -45,6 +46,10 @@ function App() {
     themeSaveTimer = useRef(0),
     [platformTheme, setPlatformTheme] = useState(DEFAULT_PLATFORM_THEME),
     [productCategories, setProductCategories] = useState([]),
+    // El enlace del correo llega como ?reset=<token>
+    [resetToken, setResetToken] = useState(
+      () => new URLSearchParams(window.location.search).get("reset") || "",
+    ),
     [storeThemes, setStoreThemes] = useState(() =>
       JSON.parse(
         localStorage.getItem("choping-store-themes") ||
@@ -646,6 +651,18 @@ function App() {
           setPurchased={setPurchased}
           total={total}
           close={() => setCartOpen(false)}
+        />
+      )}
+      {resetToken && (
+        <ResetPasswordModal
+          token={resetToken}
+          close={() => {
+            setResetToken("");
+            // Se quita el token de la barra de direcciones: no debe quedar en
+            // el historial ni compartirse al copiar el enlace.
+            window.history.replaceState({}, "", window.location.pathname);
+            setLoginOpen(true);
+          }}
         />
       )}
       {loginOpen && (

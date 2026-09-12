@@ -4,7 +4,11 @@ import { configuredCategories } from "../lib/catalog";
 import { DEPARTAMENTOS, municipiosDe } from "../lib/colombia";
 
 function LoginModal({ close, onLogin, currentStore = "" }) {
-  const [register, setRegister] = useState(false),
+  const [forgot, setForgot] = useState(false),
+    [forgotEmail, setForgotEmail] = useState(""),
+    [forgotMessage, setForgotMessage] = useState(""),
+    [forgotSending, setForgotSending] = useState(false),
+    [register, setRegister] = useState(false),
     [name, setName] = useState(""),
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
@@ -62,6 +66,57 @@ function LoginModal({ close, onLogin, currentStore = "" }) {
         <button className="modal-close" onClick={close}>
           ×
         </button>
+        {forgot ? (
+          <form
+            className="cart-modal-content"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setForgotSending(true);
+              setForgotMessage("");
+              try {
+                const response = await fetch(`${API}/api/auth/password/forgot`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ email: forgotEmail }),
+                });
+                const data = await response.json().catch(() => ({}));
+                setForgotMessage(data.message || data.error || "No fue posible enviar el enlace.");
+              } catch {
+                setForgotMessage("No fue posible conectar con el servidor.");
+              }
+              setForgotSending(false);
+            }}
+          >
+            <small>ACCESO UNICO</small>
+            <h2>Recuperar contraseña</h2>
+            <p className="form-hint">
+              Escribe tu correo y te enviamos un enlace para crear una contraseña nueva.
+              El enlace vence en una hora.
+            </p>
+            <label>
+              Correo electrónico
+              <input
+                type="email"
+                value={forgotEmail}
+                onChange={(event) => setForgotEmail(event.target.value)}
+                required
+              />
+            </label>
+            {forgotMessage && <p className="password-ok">{forgotMessage}</p>}
+            <div className="login-form-actions">
+              <button className="btn cart-checkout" disabled={forgotSending}>
+                {forgotSending ? "Enviando…" : "Enviar enlace"}
+              </button>
+              <button
+                type="button"
+                className="nav-link"
+                onClick={() => { setForgot(false); setForgotMessage(""); }}
+              >
+                Volver a iniciar sesión
+              </button>
+            </div>
+          </form>
+        ) : (
         <form className="cart-modal-content" onSubmit={submit}>
           <small>ACCESO UNICO</small>
           <h2>{register ? "Crear usuario" : "Iniciar sesión"}</h2>
@@ -190,6 +245,20 @@ function LoginModal({ close, onLogin, currentStore = "" }) {
             <button className="btn cart-checkout">
               {register ? "Crear usuario" : "Ingresar"}
             </button>
+            {!register && (
+              <button
+                type="button"
+                className="nav-link"
+                onClick={() => {
+                  setForgot(true);
+                  setForgotEmail(email);
+                  setForgotMessage("");
+                  setMessage("");
+                }}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            )}
             <button
               type="button"
               className="nav-link"
@@ -202,6 +271,7 @@ function LoginModal({ close, onLogin, currentStore = "" }) {
             </button>
           </div>
         </form>
+        )}
       </section>
     </div>
   );

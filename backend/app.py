@@ -1372,27 +1372,31 @@ def notification_scope(actor):
     return 'client', (actor.get('email') or '').strip().lower()
 
 
-def send_alert_email(subject, lines):
-    """Envia por Resend. Sin credenciales no hace nada: el aviso queda en la campana."""
+def send_email(to_addresses, subject, lines):
+    """Envia por Resend a cualquier destinatario.
+
+    Sin credenciales no hace nada: es una via secundaria, no puede tumbar la
+    accion que la origina.
+    """
     api_key = os.environ.get('RESEND_API_KEY', '').strip()
-    to_address = os.environ.get('ALERT_EMAIL_TO', '').strip()
     from_address = os.environ.get('ALERT_EMAIL_FROM', '').strip()
-    if not api_key or not to_address or not from_address:
+    destinos = [address.strip() for address in to_addresses if address and address.strip()]
+    if not api_key or not from_address or not destinos:
         faltan = [
             nombre for nombre, valor in (
                 ('RESEND_API_KEY', api_key),
-                ('ALERT_EMAIL_TO', to_address),
                 ('ALERT_EMAIL_FROM', from_address),
+                ('destinatario', destinos),
             ) if not valor
         ]
-        app.logger.warning('Alerta por correo no enviada, faltan variables: %s', ', '.join(faltan))
+        app.logger.warning('Correo no enviado, falta: %s', ', '.join(faltan))
         return False, 'email-not-configured'
     cuerpo = ''.join(f'<p>{line}</p>' for line in lines)
     payload = json.dumps({
         'from': from_address,
-        'to': [address.strip() for address in to_address.split(',') if address.strip()],
+        'to': destinos,
         'subject': subject,
-        'html': f'<div style="font-family:system-ui,sans-serif;color:#18345f">{cuerpo}</div>',
+        'html': f'<div style="font-family:system-ui,sans-serif;color:#18345f;line-height:1.5">{cuerpo}</div>',
     }).encode('utf-8')
     request_to_resend = Request(
         'https://api.resend.com/emails',
@@ -1403,16 +1407,106 @@ def send_alert_email(subject, lines):
     try:
         with urlopen(request_to_resend, timeout=10) as response:
             response.read()
-        app.logger.info('Alerta por correo enviada: %s', subject)
+        app.logger.info('Correo enviado: %s', subject)
         return True, None
     except HTTPError as error:
         detalle = f'{error.code}: {error.read()[:300].decode("utf-8", "replace")}'
     except (URLError, TimeoutError) as error:
         detalle = str(error)
-    # Sin esto un fallo de correo era invisible: la campana funcionaba y nadie
-    # sabia por que no llegaba el mensaje.
-    app.logger.error('Alerta por correo rechazada por Resend: %s', detalle)
+    app.logger.error('Correo rechazado por Resend: %s', detalle)
     return False, detalle
+
+
+def send_alert_email(subject, lines):
+    """Avisa al administrador configurado en ALERT_EMAIL_TO."""
+    to_address = os.environ.get('ALERT_EMAIL_TO', '').strip()
+    if not to_address:
+        app.logger.warning('Alerta por correo no enviada, falta: ALERT_EMAIL_TO')
+        return False, 'email-not-configured'
+    return send_email(to_address.split(','), subject, lines)
+
+
+def reset_serializer():
+    return URLSafeTimedSerializer(app.config['SECRET_KEY'], salt='choping-password-reset')
+
+
+def password_reset_token(account):
+    """Firma el correo junto a una huella de la contrasena actual.
+
+    Asi el enlace deja de servir en cuanto la contrasena cambia: se usa una
+    sola vez sin necesidad de guardar nada.
+    """
+    huella = account.password_hash[-12:]
+    return reset_serializer().dumps({'email': account.email, 'huella': huella})
+
+
+def account_from_reset_token(token, max_age=3600):
+    try:
+        datos = reset_serializer().loads(token, max_age=max_age)
+    except SignatureExpired:
+        return None, 'El enlace expiro. Solicita uno nuevo.'
+    except BadSignature:
+        return None, 'El enlace no es valido. Solicita uno nuevo.'
+    account = LocalUser.query.filter_by(email=(datos.get('email') or '').strip().lower()).first()
+    if not account:
+        return None, 'El enlace no es valido. Solicita uno nuevo.'
+    if account.password_hash[-12:] != datos.get('huella'):
+        return None, 'Este enlace ya se uso. Solicita uno nuevo.'
+    if not account.active:
+        return None, 'Esta cuenta esta desactivada. Contacta al administrador.'
+    return account, None
+
+
+@app.post('/api/auth/password/forgot')
+def forgot_password():
+    """Envia el enlace de restauracion.
+
+    Responde siempre lo mismo: decir si el correo existe permitiria averiguar
+    quien tiene cuenta probando direcciones.
+    """
+    data = request.get_json(silent=True) or {}
+    email = (data.get('email') or '').strip().lower()
+    respuesta = {'message': 'Si el correo esta registrado, enviamos el enlace para restaurar la contrasena.'}
+    if not email:
+        return jsonify({'error': 'Indica tu correo electronico.'}), 400
+    account = LocalUser.query.filter_by(email=email).first()
+    if not account or not account.active:
+        app.logger.info('Restauracion solicitada para un correo sin cuenta activa')
+        return jsonify(respuesta)
+    origen = os.environ.get('FRONTEND_ORIGIN', '').split(',')[0].strip().rstrip('/') or ''
+    enlace = f"{origen}/?reset={password_reset_token(account)}"
+    send_email(
+        [account.email],
+        'Choping: restaura tu contrasena',
+        [
+            f'Hola {account.name or ""},',
+            'Recibimos una solicitud para restaurar la contrasena de tu cuenta en Choping.',
+            f'<a href="{enlace}" style="display:inline-block;padding:12px 20px;'
+            'background:#075ee8;color:#fff;border-radius:10px;text-decoration:none;'
+            'font-weight:600">Crear una contrasena nueva</a>',
+            'El enlace vence en una hora y solo se puede usar una vez.',
+            'Si no fuiste tu, ignora este mensaje: tu contrasena no cambia.',
+        ],
+    )
+    return jsonify(respuesta)
+
+
+@app.post('/api/auth/password/reset')
+def reset_password():
+    data = request.get_json(silent=True) or {}
+    nueva = data.get('password', '')
+    if len(nueva) < 8:
+        return jsonify({'error': 'La nueva contrasena debe tener al menos 8 caracteres.'}), 400
+    account, error = account_from_reset_token((data.get('token') or '').strip())
+    if error:
+        return jsonify({'error': error}), 400
+    try:
+        account.password_hash = generate_password_hash(nueva)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'No fue posible actualizar la contrasena.'}), 500
+    return jsonify({'ok': True, 'email': account.email})
 
 
 @app.get('/api/admin/alerts/status')
