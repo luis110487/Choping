@@ -171,7 +171,8 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
       const data = await response.json().catch(() => ({}));
       setAlertResult(
         data.enviado
-          ? "Correo de prueba enviado. Revisa la bandeja del destinatario."
+          ? `Resend aceptó el mensaje${data.id ? ` (id ${data.id})` : ""}. De ${data.de} para ${data.para}. ` +
+            "Aceptar no es entregar: si no llega, busca ese id en el panel de Resend para ver si fue entregado o rebotado."
           : `No se pudo enviar: ${data.detalle || data.error || "error desconocido"}`,
       );
     } catch {
@@ -564,7 +565,7 @@ function AdminBannerPanel({ stores, banner, setBanner, directoryBanner, setDirec
                 {alertTesting ? "Enviando…" : "Enviar correo de prueba"}
               </button>
               {alertResult && (
-                <p className={alertResult.startsWith("Correo") ? "password-ok" : "store-media-error"}>
+                <p className={alertResult.startsWith("Resend aceptó") ? "password-ok" : "store-media-error"}>
                   {alertResult}
                 </p>
               )}

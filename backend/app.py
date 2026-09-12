@@ -1406,9 +1406,15 @@ def send_email(to_addresses, subject, lines):
     )
     try:
         with urlopen(request_to_resend, timeout=10) as response:
-            response.read()
-        app.logger.info('Correo enviado: %s', subject)
-        return True, None
+            cuerpo_respuesta = response.read()
+        # Resend devuelve un id: aceptar no es entregar, y ese id es lo que
+        # permite ver en su panel si el mensaje se entrego o reboto.
+        try:
+            mensaje_id = json.loads(cuerpo_respuesta.decode('utf-8')).get('id', '')
+        except ValueError:
+            mensaje_id = ''
+        app.logger.info('Correo aceptado por Resend (id %s): %s', mensaje_id or 'sin id', subject)
+        return True, mensaje_id
     except HTTPError as error:
         detalle = f'{error.code}: {error.read()[:300].decode("utf-8", "replace")}'
     except (URLError, TimeoutError) as error:
@@ -1530,6 +1536,8 @@ def alerts_test():
     """Envia un correo de prueba y devuelve el resultado real de Resend."""
     if not authenticated_actor():
         return jsonify({'error': 'Solo un administrador puede enviar la prueba.'}), 403
+    destino = os.environ.get('ALERT_EMAIL_TO', '').strip()
+    remitente = os.environ.get('ALERT_EMAIL_FROM', '').strip()
     enviado, detalle = send_alert_email(
         'Choping: prueba de alertas',
         [
@@ -1538,7 +1546,12 @@ def alerts_test():
         ],
     )
     if enviado:
-        return jsonify({'enviado': True})
+        return jsonify({
+            'enviado': True,
+            'id': detalle or '',
+            'de': remitente,
+            'para': destino,
+        })
     return jsonify({'enviado': False, 'detalle': detalle}), 502
 
 
