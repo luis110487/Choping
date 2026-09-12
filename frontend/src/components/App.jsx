@@ -725,9 +725,18 @@ function App() {
           close={() => setStoreAdminOpen(false)}
         />
       )}
-      <footer>
-        Desarrollado por{" "}
-        <a href="https://www.techdatasync.com">www.techdatasync.com</a>
+      <footer className="site-footer">
+        <span className="site-footer-brand">
+          {/* El año se calcula al renderizar: uno escrito a mano envejece solo. */}
+          © {new Date().getFullYear()} Choping
+        </span>
+        <span className="site-footer-separator" aria-hidden="true">·</span>
+        <span>
+          Desarrollado por{" "}
+          <a href="https://www.techdatasync.com" target="_blank" rel="noopener noreferrer">
+            www.techdatasync.com
+          </a>
+        </span>
       </footer>
     </div>
   );
