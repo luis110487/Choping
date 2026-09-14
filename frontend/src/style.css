@@ -289,10 +289,6 @@ header{padding:0;background:var(--choping-white);border-bottom:1px solid var(--c
 .store-card-empty .store-card-cta{background:#f4f8ff;color:var(--choping-blue);border-color:#cfe0fb}
 .store-card-placeholder{border-color:#e7eefa;color:var(--choping-muted)}
 
-/* --- Ver todas las tiendas ------------------------------------------- */
-.directory-more{max-width:var(--shell);margin:0 auto;padding:22px 24px 0;display:flex;justify-content:center}
-.directory-more button{padding:12px 26px;border:1px solid #a9c9f7;border-radius:10px;background:var(--choping-white);color:var(--choping-blue);font-size:14px;font-weight:600;cursor:pointer;transition:all .2s ease}
-.directory-more button:hover{background:#f3f8ff;border-color:var(--choping-blue)}
 
 /* --- Scrollbar -------------------------------------------------------- */
 ::-webkit-scrollbar{width:8px}

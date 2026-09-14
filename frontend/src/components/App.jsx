@@ -19,7 +19,6 @@ function App() {
   const [stores, setStores] = useState([]),
     [store, setStore] = useState(null),
     [showAllProducts, setShowAllProducts] = useState(false),
-    [showAllStores, setShowAllStores] = useState(false),
     [query, setQuery] = useState(""),
     [categoryFilter, setCategoryFilter] = useState(""),
     [selected, setSelected] = useState(null),
@@ -445,7 +444,6 @@ function App() {
                 setStore(null);
                 setStoreAdminOpen(false);
                 setShowAllProducts(false);
-                setShowAllStores(false);
                 setQuery("");
                 // El filtro venia de la tienda que se estaba viendo.
                 setCategoryFilter("");
@@ -541,13 +539,6 @@ function App() {
                 <p>Descubre tiendas recomendadas y sus productos más populares.</p>
               </div>
               <div className="store-grid">{renderStoreCards(featuredStores, true)}</div>
-              {!showAllStores && otherStores.length > 0 && (
-                <div className="directory-more">
-                  <button type="button" onClick={() => setShowAllStores(true)}>
-                    Ver todas las tiendas ({visibleStores.length})
-                  </button>
-                </div>
-              )}
             </section>
           )}
           {(
@@ -563,7 +554,7 @@ function App() {
               />
             </section>
           )}
-          {otherStores.length > 0 && (showAllStores || !featuredStores.length) && (
+          {otherStores.length > 0 && (
             <section className="store-directory-section other-stores-section">
               <div className="store-section-heading">
                 <small>DIRECTORIO DE TIENDAS</small>
