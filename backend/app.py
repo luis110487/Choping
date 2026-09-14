@@ -1339,6 +1339,13 @@ class Notification(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
+def money_text(value):
+    try:
+        return '$' + f'{float(value):,.0f}'.replace(',', '.')
+    except (TypeError, ValueError):
+        return ''
+
+
 NOTIFICATION_AUDIENCES = {'admin', 'store', 'client'}
 
 
@@ -1561,6 +1568,49 @@ def alerts_test():
             'para': destino,
         })
     return jsonify({'enviado': False, 'detalle': detalle}), 502
+
+
+@app.post('/api/cart/interest')
+def cart_interest():
+    """Avisa a la tienda que alguien puso uno de sus productos en el carrito.
+
+    No exige sesion: la mayoria de los carritos se arman antes de iniciarla.
+    La tienda se resuelve desde la base a partir del producto, nunca desde lo
+    que manda el cliente, para que nadie pueda dirigir avisos a una tienda
+    ajena. Y solo se guarda un aviso sin leer por producto, asi que recargar
+    la pagina o agregar diez veces no llena la campana.
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        product_id = int(data.get('product_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Indica el producto.'}), 400
+    if not os.environ.get('DATABASE_URL'):
+        return jsonify({'ok': False, 'reason': 'sin-base-de-datos'})
+    consulta = (
+        'select p.name as producto, s.name as tienda from products p '
+        'join stores s on s.id = p.store_id where p.id = :id'
+    )
+    try:
+        fila = db.session.execute(text(consulta), {'id': product_id}).mappings().first()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'ok': False, 'reason': 'consulta-fallida'})
+    if not fila:
+        return jsonify({'error': 'No encontramos ese producto.'}), 404
+    destino = (fila['tienda'] or '').strip().lower()
+    titulo = f"Agregaron \"{fila['producto']}\" al carrito"
+    try:
+        repetido = Notification.query.filter_by(
+            audience='store', target=destino, kind='cart-interest', title=titulo, read=False,
+        ).first()
+    except Exception:
+        db.session.rollback()
+        repetido = None
+    if repetido:
+        return jsonify({'ok': True, 'repetido': True})
+    notify('store', 'cart-interest', titulo, 'Todavia no es una compra confirmada.', target=destino)
+    return jsonify({'ok': True})
 
 
 @app.get('/api/notifications')
@@ -1802,9 +1852,16 @@ def create_store_product():
     fields, error = parse_product_payload(request.get_json(silent=True) or {})
     if error:
         return jsonify({'error': error}), 400
-    product, error = create_catalog_product(actor.get('store_name', ''), fields)
+    tienda = actor.get('store_name', '')
+    product, error = create_catalog_product(tienda, fields)
     if error:
         return jsonify({'error': error}), 404 if 'tienda' in error.lower() else 500
+    # A la tienda como registro de su actividad, y a los administradores para
+    # que puedan revisar lo que se publica en la plataforma.
+    notify('store', 'product-created', f"Publicaste \"{fields['name']}\"",
+           f"{fields['category']} · {money_text(fields['price'])}", target=tienda)
+    notify('admin', 'product-created', f"{tienda} publico un producto",
+           f"{fields['name']} · {fields['category']} · {money_text(fields['price'])}")
     return jsonify({'product': product}), 201
 
 @app.post('/api/admin/users')

@@ -230,7 +230,7 @@ function App() {
         </article>
       );
     });
-  const add = (p, q = 1) =>
+  const add = (p, q = 1) => {
     setCart((c) => {
       const stock = Number(p.stock ?? Number.POSITIVE_INFINITY);
       if (stock <= 0) return c;
@@ -239,6 +239,16 @@ function App() {
         ? c.map((i) => (i.id === p.id ? { ...i, quantity: Math.min(stock, i.quantity + q) } : i))
         : [...c, { ...p, quantity: Math.min(stock, q) }];
     });
+    // Aviso a la tienda, sin esperar respuesta: agregar al carrito no puede
+    // depender de que el servidor conteste.
+    if (Number(p.stock ?? 1) > 0 && p.id) {
+      fetch(`${API}/api/cart/interest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: p.id }),
+      }).catch(() => {});
+    }
+  };
   const total = cart.reduce((s, p) => s + p.price * p.quantity, 0);
   const logout = () => {
     setUser(null);

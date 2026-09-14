@@ -882,6 +882,45 @@ class AdminUserProvisioningTests(unittest.TestCase):
         self.assertTrue(agente.startswith('Choping/'), agente)
         self.assertNotIn('urllib', agente.lower())
 
+    def test_cart_interest_needs_a_real_product(self):
+        self.assertEqual(self.client.post('/api/cart/interest', json={}).status_code, 400)
+        self.assertEqual(
+            self.client.post('/api/cart/interest', json={'product_id': 'abc'}).status_code, 400,
+        )
+
+    def test_cart_interest_resolves_the_store_from_the_database(self):
+        """La tienda sale del producto, no de lo que manda el cliente: si
+        viniera del cliente se podrian dirigir avisos a una tienda ajena."""
+        fila = {'producto': 'Taladro', 'tienda': 'Tech Zone'}
+        with patch('app.os.environ.get', side_effect=lambda k, d=None: 'postgres://x' if k == 'DATABASE_URL' else os.environ.get(k, d)),              patch('app.db.session') as sesion:
+            sesion.execute.return_value.mappings.return_value.first.return_value = fila
+            with patch('app.Notification') as modelo, patch('app.notify') as avisar:
+                modelo.query.filter_by.return_value.first.return_value = None
+                respuesta = self.client.post('/api/cart/interest',
+                                             json={'product_id': 1, 'store': 'Casa Viva'})
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTrue(avisar.called)
+        audiencia, clase, titulo = avisar.call_args[0][:3]
+        self.assertEqual(audiencia, 'store')
+        self.assertEqual(clase, 'cart-interest')
+        self.assertIn('Taladro', titulo)
+        # La tienda es la dueña del producto, no la que llegó en el cuerpo.
+        self.assertEqual(avisar.call_args[1]['target'], 'tech zone')
+
+    @patch('app.create_catalog_product')
+    def test_creating_a_product_alerts_store_and_admins(self, crear):
+        crear.return_value = ({'id': 1, 'name': 'Taladro'}, None)
+        headers = self.store_session(store_name='Casa Viva', email='casaviva@gmail.com')
+        with patch('app.notify') as avisar:
+            respuesta = self.client.post('/api/store/products', headers=headers, json={
+                'name': 'Taladro', 'category': 'Herramientas', 'price': 189000, 'stock': 3,
+            })
+
+        self.assertEqual(respuesta.status_code, 201)
+        audiencias = [llamada[0][0] for llamada in avisar.call_args_list]
+        self.assertEqual(sorted(audiencias), ['admin', 'store'])
+
 
 if __name__ == '__main__':
     unittest.main()
