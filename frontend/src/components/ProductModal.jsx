@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { money, productImageUrl } from "../lib/api";
+import { money, onImageError, productImageUrl } from "../lib/api";
 import { Stars } from "./Stars";
 
 function ProductModal({ product, add, close }) {
@@ -28,7 +28,7 @@ function ProductModal({ product, add, close }) {
               <img
                 src={productImageUrl(images[imageIndex])}
                 alt={product.name}
-              />
+               onError={onImageError} />
               <button
                 className="image-arrow next"
                 onClick={() => setImageIndex((imageIndex + 1) % images.length)}
@@ -46,7 +46,7 @@ function ProductModal({ product, add, close }) {
                   <img
                     src={productImageUrl(x)}
                     alt={`Vista ${i + 1}`}
-                  />
+                   onError={onImageError} />
                 </button>
               ))}
             </div>

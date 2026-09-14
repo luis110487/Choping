@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { API, money, productImageUrl, storeMediaUrl } from "../lib/api";
+import { API, money, onImageError, productImageUrl, storeMediaUrl } from "../lib/api";
 import { DEFAULT_PLATFORM_THEME, normalizeTheme, platformStyleVars, themeClassName, themeStyleVars } from "../lib/theme";
 import { configuredCategoryEntries } from "../lib/catalog";
 import { isPlatformAdmin, loadCurrentUser, normalizeAccount } from "../lib/accounts";
@@ -184,13 +184,13 @@ function App() {
                 src={s.media?.banners?.[0] ? storeMediaUrl(cover) : productImageUrl(cover)}
                 alt=""
                 loading="lazy"
-              />
+               onError={onImageError} />
             )}
           </div>
           <div className="store-card-body">
           <div className="store-card-head">
             {s.media?.logo ? (
-              <img className="store-card-logo" src={storeMediaUrl(s.media.logo)} alt={`Logo de ${s.name}`} />
+              <img className="store-card-logo" src={storeMediaUrl(s.media.logo)} alt={`Logo de ${s.name}`}  onError={onImageError} />
             ) : (
               <div className="store-mark">{s.name.slice(0, 1)}</div>
             )}
@@ -217,7 +217,7 @@ function App() {
               style={{ gridTemplateColumns: `repeat(${preview.length}, 1fr)` }}
             >
               {preview.map((product) => (
-                <img key={product.id} src={productImageUrl(product.image)} alt="" loading="lazy" />
+                <img key={product.id} src={productImageUrl(product.image)} alt="" loading="lazy"  onError={onImageError} />
               ))}
             </div>
           ) : (
@@ -571,7 +571,7 @@ function App() {
         <main className={`store-profile ${themeClassName(storeThemes[store.name])}`}>
           <header className="store-identity">
             {store.media?.logo ? (
-              <img className="store-identity-logo" src={storeMediaUrl(store.media.logo)} alt={`Logo de ${store.name}`} />
+              <img className="store-identity-logo" src={storeMediaUrl(store.media.logo)} alt={`Logo de ${store.name}`}  onError={onImageError} />
             ) : (
               <span className="store-identity-mark">{store.name?.slice(0, 1) || "T"}</span>
             )}
@@ -592,7 +592,7 @@ function App() {
                 onClick={() => setSelected(p)}
               >
                 <div className="product-photo">
-                  <img src={productImageUrl(p.image)} alt={p.name} />
+                  <img src={productImageUrl(p.image)} alt={p.name}  onError={onImageError} />
                   {Number(p.original_price) > Number(p.price) && <span className="product-sale-badge">Oferta</span>}
                 </div>
                 <div className="product-info">

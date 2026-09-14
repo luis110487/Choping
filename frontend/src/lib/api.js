@@ -8,4 +8,18 @@ const productImageUrl = (image) =>
 const storeMediaUrl = (value) =>
   !value ? "" : /^(https?:)?\/\//i.test(value) ? value : `${API}/static/img/${value}`;
 
-export { API, money, productImageUrl, storeMediaUrl };
+/**
+ * Sustituye una imagen que no carga por la de respaldo.
+ *
+ * Una ruta guardada puede dejar de resolver: una subida que fallo, una URL
+ * externa que ya no existe o un archivo perdido. Sin esto el navegador pinta
+ * el icono de imagen rota, que se ve peor que una foto generica.
+ */
+const onImageError = (event) => {
+  const img = event.currentTarget;
+  if (img.dataset.respaldo) return; // evita un bucle si el respaldo tampoco carga
+  img.dataset.respaldo = "1";
+  img.src = productImageUrl("");
+};
+
+export { API, money, onImageError, productImageUrl, storeMediaUrl };

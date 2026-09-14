@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { money, productImageUrl } from "../lib/api";
+import { money, onImageError, productImageUrl } from "../lib/api";
 import { STORE_COLOR_FIELDS, STORE_FONTS, STORE_FONT_SLOTS, STORE_PRESETS, fontStack, normalizeTheme, themeFonts, themePalette } from "../lib/theme";
 import { StoreMediaManager } from "./StoreMediaManager";
 
@@ -95,7 +95,7 @@ function StoreThemeStudio({ store, theme, setTheme, media, setMedia }) {
           </span>
           <article className="product-card theme-preview-card" style={{ background: palette.surface, borderColor: palette.accent, fontFamily: fontStack(fonts.body) }}>
             <div className="product-photo">
-              <img src={productImageUrl(previewProduct.image)} alt={previewProduct.name} />
+              <img src={productImageUrl(previewProduct.image)} alt={previewProduct.name}  onError={onImageError} />
               <span className="product-sale-badge" style={{ background: palette.icon }}>Oferta</span>
             </div>
             <div className="product-info">

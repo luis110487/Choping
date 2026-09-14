@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { money, productImageUrl } from "../lib/api";
+import { money, onImageError, productImageUrl } from "../lib/api";
 
 function CartModal({ cart, setCart, setPurchased, total, close }) {
   const [notice, setNotice] = useState(false);
@@ -15,7 +15,7 @@ function CartModal({ cart, setCart, setPurchased, total, close }) {
           {cart.length ? (
             cart.map((p) => (
               <div className="cart-item" key={p.id}>
-                <img src={productImageUrl(p.image)} alt="" />
+                <img src={productImageUrl(p.image)} alt=""  onError={onImageError} />
                 <div className="cart-item-info">
                   <strong>{p.name}</strong>
                   <b>{money(p.price)}</b>
