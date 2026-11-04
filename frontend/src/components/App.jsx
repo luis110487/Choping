@@ -749,7 +749,7 @@ function App() {
       <footer className="site-footer">
         <span className="site-footer-brand">
           {/* El año se calcula al renderizar: uno escrito a mano envejece solo. */}
-          © {new Date().getFullYear()} Choping
+          © 2024 Choping
         </span>
         <span className="site-footer-separator" aria-hidden="true">·</span>
         <span>
