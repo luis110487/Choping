@@ -41,6 +41,12 @@ function BannerSlider({ storeName, banner, setBanner, storeBanners, storageKey =
         className="banner-image"
         src={images[banner % images.length]}
         alt={`Banner ${banner + 1}`}
+        onError={(e) => {
+          const fallback = defaultImages[banner % defaultImages.length];
+          if (e.currentTarget.src !== window.location.origin + fallback) {
+            e.currentTarget.src = fallback;
+          }
+        }}
       />
       <button
         className="banner-control previous"
